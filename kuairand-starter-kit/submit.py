@@ -76,13 +76,12 @@ if __name__ == '__main__':
     rows = splits[a.split]
 
     if a.make:
-        from baseline import run_fm
-        import baseline as B, numpy as np
+        import official_baseline as B, numpy as np
         enc, dim = encode(splits)
         Xtr, ytr, _ = enc['train']
         Xva, yva, uva = enc['valid']
         X, y, u = enc[a.split]
-        m = B.FM(dim, k=16, lr=0.001, seed=0)
+        m = B.OfficialFM(dim, k=16, lr=0.001, seed=0)
         rng = np.random.default_rng(0)
         best, state, bad = -1, None, 0
         for ep in range(40):
