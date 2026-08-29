@@ -1,0 +1,173 @@
+"""Strict JSON experiment specification used by the deterministic runner."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import hashlib
+import json
+from pathlib import Path
+import re
+from typing import Any, Mapping
+
+from experiment_engine.experiment_templates import get_template
+from experiment_boundary import MAX_WALL_SECONDS, REPOSITORY_ROOT
+
+
+SCHEMA_VERSION = 1
+EXPERIMENT_ID = re.compile(r"E[0-9]{4,8}")
+TOP_LEVEL_FIELDS = {
+    "schema_version",
+    "experiment_id",
+    "template",
+    "data_dir",
+    "seed",
+    "parameters",
+    "budget",
+    "hypothesis",
+}
+MAX_EPOCHS = 40
+
+
+class SpecificationError(ValueError):
+    """Raised when an experiment specification is invalid or unsafe."""
+
+
+@dataclass(frozen=True)
+class ExperimentBudget:
+    max_epochs: int = MAX_EPOCHS
+    max_wall_seconds: int = MAX_WALL_SECONDS
+
+    @classmethod
+    def from_mapping(cls, value: Any) -> "ExperimentBudget":
+        if not isinstance(value, Mapping):
+            raise SpecificationError("budget must be a JSON object")
+        unknown = sorted(set(value) - {"max_epochs", "max_wall_seconds"})
+        if unknown:
+            raise SpecificationError(f"unknown budget fields: {', '.join(unknown)}")
+        max_epochs = value.get("max_epochs", MAX_EPOCHS)
+        max_wall_seconds = value.get("max_wall_seconds", MAX_WALL_SECONDS)
+        if isinstance(max_epochs, bool) or not isinstance(max_epochs, int):
+            raise SpecificationError("budget.max_epochs must be an integer")
+        if not 1 <= max_epochs <= MAX_EPOCHS:
+            raise SpecificationError(
+                f"budget.max_epochs must be between 1 and {MAX_EPOCHS}"
+            )
+        if isinstance(max_wall_seconds, bool) or not isinstance(max_wall_seconds, int):
+            raise SpecificationError("budget.max_wall_seconds must be an integer")
+        if not 1 <= max_wall_seconds <= MAX_WALL_SECONDS:
+            raise SpecificationError(
+                "budget.max_wall_seconds must be between 1 and "
+                f"{MAX_WALL_SECONDS}"
+            )
+        return cls(max_epochs=max_epochs, max_wall_seconds=max_wall_seconds)
+
+
+@dataclass(frozen=True)
+class ExperimentSpec:
+    schema_version: int
+    experiment_id: str
+    template: str
+    data_dir: str
+    seed: int
+    parameters: Mapping[str, int | float]
+    budget: ExperimentBudget
+    hypothesis: str
+
+    @classmethod
+    def from_mapping(cls, value: Any) -> "ExperimentSpec":
+        if not isinstance(value, Mapping):
+            raise SpecificationError("experiment specification must be a JSON object")
+        unknown = sorted(set(value) - TOP_LEVEL_FIELDS)
+        if unknown:
+            raise SpecificationError(
+                f"unknown specification fields: {', '.join(unknown)}"
+            )
+        missing = sorted(
+            {"schema_version", "experiment_id", "template", "hypothesis"}
+            - set(value)
+        )
+        if missing:
+            raise SpecificationError(f"missing required fields: {', '.join(missing)}")
+        if value["schema_version"] != SCHEMA_VERSION:
+            raise SpecificationError(
+                f"schema_version must be {SCHEMA_VERSION}; received "
+                f"{value['schema_version']!r}"
+            )
+        experiment_id = value["experiment_id"]
+        if not isinstance(experiment_id, str) or not EXPERIMENT_ID.fullmatch(experiment_id):
+            raise SpecificationError("experiment_id must match E followed by 4-8 digits")
+        template_name = value["template"]
+        if not isinstance(template_name, str):
+            raise SpecificationError("template must be a string")
+        template = get_template(template_name)
+        raw_parameters = value.get("parameters", {})
+        if not isinstance(raw_parameters, Mapping):
+            raise SpecificationError("parameters must be a JSON object")
+        parameters = template.normalize_parameters(raw_parameters)
+        seed = value.get("seed", 0)
+        if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= 2**32 - 1:
+            raise SpecificationError("seed must be an integer between 0 and 2^32-1")
+        hypothesis = value["hypothesis"]
+        if not isinstance(hypothesis, str) or not hypothesis.strip():
+            raise SpecificationError("hypothesis must be a non-empty string")
+        if len(hypothesis) > 2000:
+            raise SpecificationError("hypothesis must contain at most 2000 characters")
+        data_dir = value.get("data_dir", "./KuaiRand-Pure/data")
+        if not isinstance(data_dir, str) or not data_dir.strip():
+            raise SpecificationError("data_dir must be a non-empty string")
+        _resolve_repository_path(data_dir)
+        return cls(
+            schema_version=SCHEMA_VERSION,
+            experiment_id=experiment_id,
+            template=template_name,
+            data_dir=data_dir,
+            seed=seed,
+            parameters=parameters,
+            budget=ExperimentBudget.from_mapping(value.get("budget", {})),
+            hypothesis=hypothesis.strip(),
+        )
+
+    @classmethod
+    def load(cls, path: str | Path) -> "ExperimentSpec":
+        try:
+            with Path(path).open(encoding="utf-8") as stream:
+                value = json.load(stream)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise SpecificationError(f"could not load specification {path}: {exc}") from exc
+        return cls.from_mapping(value)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "experiment_id": self.experiment_id,
+            "template": self.template,
+            "data_dir": self.data_dir,
+            "seed": self.seed,
+            "parameters": dict(self.parameters),
+            "budget": {
+                "max_epochs": self.budget.max_epochs,
+                "max_wall_seconds": self.budget.max_wall_seconds,
+            },
+            "hypothesis": self.hypothesis,
+        }
+
+    def fingerprint(self) -> str:
+        canonical = json.dumps(
+            self.to_dict(), sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        return hashlib.sha256(canonical).hexdigest()
+
+    def resolved_data_dir(self) -> Path:
+        return _resolve_repository_path(self.data_dir)
+
+
+def _resolve_repository_path(value: str) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        path = REPOSITORY_ROOT / path
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(REPOSITORY_ROOT)
+    except ValueError as exc:
+        raise SpecificationError(f"data_dir must stay inside the repository: {resolved}") from exc
+    return resolved

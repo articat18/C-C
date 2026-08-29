@@ -45,6 +45,57 @@ Run the organizers' original implementation separately:
 python3 official_baseline.py
 ```
 
+## Reproduction and Controlled Experiments
+
+Run the stable three-seed BPR FM candidate with the published configuration and
+require every validation/test metric to be within `0.002` of
+`baseline_scores.json`:
+
+```bash
+python3 -m experiment_engine.reproduce_baseline
+```
+
+This is an explicit baseline-reproduction command, not part of candidate model
+selection. The frozen pointwise implementation remains in `official_baseline.py`
+for provenance and semantics tests, but it is known to train unstably; the BPR
+ensemble is the score-reproducing implementation. The reproduction command
+trains on the full local dataset and can take several minutes. To also save its
+structured report under an agent-editable directory:
+
+```bash
+python3 -m experiment_engine.reproduce_baseline --output runs/baseline-reproduction.json
+```
+
+Candidate experiments use strict JSON specifications and a closed catalog of
+approved templates. Start by copying a template and assigning a new experiment
+ID; never run the checked-in example ID more than once:
+
+```bash
+cp experiments/templates/bpr_hybrid.json experiments/E0003.json
+# edit experiment_id, hypothesis, and approved scalar parameters
+python3 -m experiment_engine.controller run experiments/E0003.json
+python3 -m experiment_engine.controller status
+```
+
+The controller verifies protected hashes, enforces the iteration and wall-clock
+budgets, prevents duplicate experiment IDs, and stops after convergence. The
+runner removes the real test rows before candidate feature encoding and reports
+validation metrics only. It writes atomic model checkpoints under `checkpoints/`,
+structured run evidence under `experiments/E####/`, and one append-only registry
+record to `experiments/index.jsonl`.
+
+The initial approved templates are:
+
+| Template | Purpose |
+|---|---|
+| `bpr_hybrid` | One FM trained with within-user BPR plus auxiliary BCE |
+| `bpr_ensemble` | Three consecutive-seed hybrid-BPR FMs with an optional popularity prior |
+
+Specifications cannot contain commands, Python paths, or source code. Unknown
+fields and parameters are rejected. Add a reviewed template to
+`experiment_engine/experiment_templates.py` when a genuinely new experiment
+family is ready.
+
 ## Vertex AI API (Phase 2)
 
 We recommend creating a separate environment with Python 3.12. The current system default,

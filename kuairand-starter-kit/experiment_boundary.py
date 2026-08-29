@@ -22,6 +22,7 @@ EDITABLE_ROOTS = (
     "agent",
     "candidates",
     "checkpoints",
+    "experiment_engine",
     "experiments",
     "runs",
 )

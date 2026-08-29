@@ -16,6 +16,10 @@ class ExperimentBoundaryTests(unittest.TestCase):
         path = resolve_editable_path("candidates/new_model.py")
         self.assertTrue(str(path).endswith("candidates/new_model.py"))
 
+    def test_experiment_engine_path_is_editable(self):
+        path = resolve_editable_path("experiment_engine/controller.py")
+        self.assertTrue(str(path).endswith("experiment_engine/controller.py"))
+
     def test_evaluator_is_protected(self):
         with self.assertRaises(BoundaryViolation):
             resolve_editable_path("evaluate.py")

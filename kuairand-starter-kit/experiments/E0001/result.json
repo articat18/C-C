@@ -1,0 +1,48 @@
+{
+  "checkpoints": [
+    {
+      "arrays": "checkpoints/E0001/member-00.npz",
+      "metadata": "checkpoints/E0001/member-00.json"
+    }
+  ],
+  "comparison": {
+    "decision": "keep",
+    "epsilon": 0.002,
+    "improvement": null,
+    "previous_best": null
+  },
+  "completed_at": "2026-08-29T05:03:33.297468+00:00",
+  "duration_seconds": 40.660613,
+  "environment": {
+    "git_revision": "29599d62076cba7cea521eb52cffc4c80c586649",
+    "numpy": "2.2.6",
+    "python": "3.14.0"
+  },
+  "experiment_id": "E0001",
+  "member_metrics": [
+    {
+      "GAUC": 0.6619760394096375,
+      "nDCG@5": 0.5341242551803589,
+      "primary": 0.5980501174926758,
+      "rows": 124909,
+      "users": 22377
+    }
+  ],
+  "metrics": {
+    "valid": {
+      "GAUC": 0.6619760394096375,
+      "nDCG@5": 0.5341242551803589,
+      "primary": 0.5980501174926758,
+      "rows": 124909,
+      "users": 22377
+    }
+  },
+  "rows": {
+    "train": 1141112,
+    "valid": 124909
+  },
+  "selection_split": "valid",
+  "spec_fingerprint": "d75b2581ee35dd6a424accfc295fe736c245356e1e3e1a097e529a0af31e8020",
+  "status": "success",
+  "template": "bpr_hybrid"
+}
