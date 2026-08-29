@@ -6,7 +6,7 @@
 """
 import argparse, collections, time
 import numpy as np
-from data import load, encode, FIELDS
+from data import load, encode, FIELDS, add_history_features
 from evaluate import evaluate
 
 def sigmoid(x): return 1.0 / (1.0 + np.exp(-np.clip(x, -30, 30)))
@@ -246,6 +246,13 @@ if __name__ == '__main__':
     a = ap.parse_args()
     print(f"loading {a.data_dir} ...")
     splits = load(a.data_dir)
+
+    print("BEFORE:", len(splits['train'][0]))
+
+    splits = add_history_features(splits)
+
+    print("AFTER:", len(splits['train'][0]))    
+    
     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
     def _run_fmbpr(s):
         return run_fm_bpr(s, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed)
