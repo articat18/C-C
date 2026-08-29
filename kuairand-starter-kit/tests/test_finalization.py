@@ -104,7 +104,7 @@ class FinalizationTests(unittest.TestCase):
         }
         _, dimension = encode(splits)
         model = baseline.FM(dimension, k=16, seed=0)
-        checkpoints = CheckpointManager(self.root / "checkpoints")
+        checkpoints = CheckpointManager(self.root / "experiments")
         checkpoints.save_member(
             spec.experiment_id,
             0,

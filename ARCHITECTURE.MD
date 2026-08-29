@@ -55,7 +55,7 @@ The agent decides what to try and interprets the evidence. It does not calculate
 | Losses and samplers | BCE, within-user BPR, LambdaRank, and negative-sampling strategies | `kuairand-starter-kit/candidates/losses/` |
 | Diagnostics | Aggregate and subgroup GAUC/nDCG analysis | `kuairand-starter-kit/experiment_engine/diagnostics.py` |
 | Run registry | Append-only specifications, metrics, timings, environment, diffs, decisions, and failures | `kuairand-starter-kit/experiments/index.jsonl` |
-| Checkpoints | Best validation checkpoint and minimal run artifacts | `kuairand-starter-kit/checkpoints/E####/` |
+| Checkpoints | Best validation checkpoint and minimal run artifacts | `kuairand-starter-kit/experiments/E####/checkpoints/` |
 | Submission gate | Generate and validate an aligned CSV after explicit approval | Existing `kuairand-starter-kit/submit.py` |
 
 ## Experiment Lifecycle
@@ -65,7 +65,7 @@ Each experiment follows a small state machine:
 ```text
 INSPECT
   -> HYPOTHESIZE
-  -> WRITE SPEC
+  -> RESERVE experiments/E####/spec.json
   -> VERIFY BOUNDARIES
   -> TRAIN
   -> SELECT BEST VALIDATION CHECKPOINT
@@ -74,6 +74,11 @@ INSPECT
   -> RECORD
   -> KEEP / REJECT / REFINE
 ```
+
+Each experiment is a self-contained package. A pending package contains only
+`spec.json`; execution adds `result.json` (or `failure.json`) and stores model
+members under `checkpoints/` in the same directory. The append-only registry
+remains the cross-experiment index.
 
 One iteration changes exactly one feature family, loss decision, or modeling decision. The controller rejects an experiment if it attempts to:
 
@@ -219,10 +224,10 @@ The test split is evaluated only for the final selected model after human approv
 
 ### Phase 2: EDA and diagnostics
 
-- Add deterministic dataset profiling and data-quality checks.
-- Add subgroup metric computation.
-- Generate a structured baseline-versus-candidate comparison.
-- Convert common diagnostic patterns into suggested next experiment families.
+- **Complete:** add deterministic dataset profiling and data-quality checks.
+- **Complete:** add subgroup metric computation.
+- **Complete:** generate structured baseline-versus-candidate comparisons.
+- **Complete:** convert common diagnostic patterns into suggested next experiment families.
 
 ### Phase 3: First research cycle
 
@@ -256,7 +261,6 @@ The orchestrator remains the only owner of experiment state, budgets, convergenc
 
 ## Immediate Milestone
 
-Phases 0 and 1 are complete. The next milestone is Phase 2: add deterministic
-EDA, subgroup diagnostics, and baseline-versus-candidate reports so later
-experiment decisions—and eventually Gemini—have evidence explaining where a
-model improves or regresses.
+Phases 0, 1, and 2 are complete. The next milestone is Phase 3: run the first
+bounded research cycle using the diagnostics to choose and interpret candidate
+experiments.

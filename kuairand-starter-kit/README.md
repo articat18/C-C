@@ -79,16 +79,16 @@ python3 -m experiment_engine.controller create \
   --template bpr_hybrid \
   --hypothesis "A BPR weight of 0.5 improves validation ranking."
 # edit the approved scalar parameter in the returned path
-python3 -m experiment_engine.controller run experiments/E0003.json
+python3 -m experiment_engine.controller run experiments/E0003/spec.json
 python3 -m experiment_engine.controller status
 ```
 
 The controller verifies protected hashes, enforces the iteration and wall-clock
 budgets, prevents duplicate experiment IDs, and stops after convergence. The
 runner removes the real test rows before candidate feature encoding and reports
-validation metrics only. It writes atomic model checkpoints under `checkpoints/`,
-structured run evidence under `experiments/E####/`, and one append-only registry
-record to `experiments/index.jsonl`.
+validation metrics only. It packages the specification, atomic model checkpoints,
+and structured run evidence together under `experiments/E####/`, then writes one
+append-only registry record to `experiments/index.jsonl`.
 
 Candidate decisions start from the protected published validation baseline,
 not an empty registry. A result is kept only when it improves that baseline or a
@@ -126,14 +126,25 @@ The project follows the phases in the repository-level `ARCHITECTURE.md`:
 |---|---|
 | Phase 0: official-baseline reproduction | Complete |
 | Phase 1: deterministic experiment spine | Complete |
-| Phase 2: EDA and subgroup diagnostics | Next |
-| Phase 3: first bounded research cycle | Planned |
+| Phase 2: EDA and subgroup diagnostics | Complete |
+| Phase 3: first bounded research cycle | Next |
 | Phase 4: cleaning and historical features | Planned |
 | Phase 5: advanced ranking | Planned |
 | Phase 6: optional multi-agent expansion | Deferred |
 
 Gemini connectivity is scaffolding for the future single-agent orchestrator; it
 is not Phase 2 and does not currently choose or run experiments.
+
+Run the deterministic Phase 2 dataset profile with:
+
+```bash
+python3 -m experiment_engine.diagnostics profile \
+  --output analysis/dataset-profile.json
+```
+
+The profile uses only train and validation labels. Candidate experiment results
+also contain validation subgroup metrics and metric deltas against the published
+baseline.
 
 ## Future Gemini Orchestrator Setup
 

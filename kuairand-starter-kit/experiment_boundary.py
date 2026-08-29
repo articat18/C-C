@@ -19,9 +19,9 @@ PROTECTED_FILES = {
 }
 
 EDITABLE_ROOTS = (
+    "analysis",
     "agent",
     "candidates",
-    "checkpoints",
     "experiment_engine",
     "experiments",
     "runs",

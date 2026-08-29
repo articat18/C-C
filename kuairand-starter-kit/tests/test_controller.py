@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -49,6 +50,11 @@ class ExperimentControllerTests(unittest.TestCase):
                 "valid": {"GAUC": 0.66, "nDCG@5": 0.54, "primary": 0.60}
             },
         }
+        package = self.root / "experiments" / spec.experiment_id
+        package.mkdir(parents=True)
+        (package / "spec.json").write_text(
+            json.dumps(spec.to_dict()), encoding="utf-8"
+        )
 
         def sandbox_path(value):
             path = Path(value)
@@ -69,8 +75,8 @@ class ExperimentControllerTests(unittest.TestCase):
             result["comparison"]["reference"], "stable_published_baseline"
         )
         self.assertAlmostEqual(result["comparison"]["previous_best"], 0.6016)
-        self.assertTrue((self.root / "experiments" / "E0088" / "spec.json").is_file())
-        self.assertTrue((self.root / "experiments" / "E0088" / "result.json").is_file())
+        self.assertTrue((package / "spec.json").is_file())
+        self.assertTrue((package / "result.json").is_file())
         records = list(registry.records())
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["experiment_id"], "E0088")
@@ -104,7 +110,7 @@ class ExperimentControllerTests(unittest.TestCase):
             )
 
         self.assertEqual(spec.experiment_id, "E0003")
-        self.assertEqual(path, experiments / "E0003.json")
+        self.assertEqual(path, experiments / "E0003" / "spec.json")
         self.assertTrue(path.is_file())
 
     def test_status_uses_published_baseline_as_initial_best(self):

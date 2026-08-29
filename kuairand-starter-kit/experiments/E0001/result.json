@@ -1,8 +1,8 @@
 {
   "checkpoints": [
     {
-      "arrays": "checkpoints/E0001/member-00.npz",
-      "metadata": "checkpoints/E0001/member-00.json"
+      "arrays": "experiments/E0001/checkpoints/member-00.npz",
+      "metadata": "experiments/E0001/checkpoints/member-00.json"
     }
   ],
   "comparison": {

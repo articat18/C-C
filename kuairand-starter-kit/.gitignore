@@ -3,5 +3,5 @@
 __pycache__/
 *.py[cod]
 runs/
-checkpoints/
+experiments/*/checkpoints/
 experiments/*/artifacts/

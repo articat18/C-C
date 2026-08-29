@@ -21,7 +21,7 @@ class ExperimentStorageTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def test_checkpoint_round_trip_and_no_overwrite(self):
-        manager = CheckpointManager(self.root / "checkpoints")
+        manager = CheckpointManager(self.root / "experiments")
         model = SimpleNamespace(
             V=np.arange(12, dtype=np.float32).reshape(6, 2),
             W=np.arange(6, dtype=np.float32),
@@ -33,6 +33,15 @@ class ExperimentStorageTests(unittest.TestCase):
         np.testing.assert_array_equal(loaded["state"]["W"], model.W)
         self.assertAlmostEqual(float(loaded["state"]["b"]), float(model.b))
         self.assertEqual(loaded["metadata"], {"seed": 3})
+        self.assertTrue(
+            (
+                self.root
+                / "experiments"
+                / "E0001"
+                / "checkpoints"
+                / "member-00.npz"
+            ).is_file()
+        )
         with self.assertRaises(CheckpointError):
             manager.save_member("E0001", 0, model=model, metadata={"seed": 3})
 

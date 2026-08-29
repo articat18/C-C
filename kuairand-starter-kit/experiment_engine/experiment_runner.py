@@ -14,9 +14,21 @@ import baseline as baseline_models
 from data import load
 from evaluate import evaluate
 from experiment_engine.checkpoints import CheckpointManager
+from experiment_engine.diagnostics import baseline_comparison, subgroup_metrics
 from experiment_engine.experiment_spec import ExperimentSpec
 from experiment_engine.experiment_templates import get_template
 from experiment_boundary import assert_model_selection_split, assert_protected_files_unchanged
+
+
+def _published_validation_metrics() -> dict[str, float]:
+    import json
+    from experiment_boundary import REPOSITORY_ROOT
+
+    with (REPOSITORY_ROOT / "baseline_scores.json").open(encoding="utf-8") as stream:
+        return {
+            name: float(value)
+            for name, value in json.load(stream)["scores"]["fm_official"]["valid"].items()
+        }
 
 
 class ExperimentTimeout(TimeoutError):
@@ -119,6 +131,14 @@ def run_experiment(
         "status": "success",
         "selection_split": "valid",
         "metrics": {"valid": valid_metrics},
+        "diagnostics": {
+            "baseline_comparison": baseline_comparison(
+                valid_metrics, _published_validation_metrics()
+            ),
+            "validation_subgroups": subgroup_metrics(
+                splits["valid"], scores, splits["train"]
+            ),
+        },
         "member_metrics": member_metrics,
         "checkpoints": checkpoints,
         "rows": {"train": len(splits["train"]), "valid": len(splits["valid"])},

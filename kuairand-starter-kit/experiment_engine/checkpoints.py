@@ -18,11 +18,13 @@ class CheckpointError(RuntimeError):
 
 
 class CheckpointManager:
-    def __init__(self, root: str | Path = "checkpoints") -> None:
+    """Store model members inside each experiment package."""
+
+    def __init__(self, root: str | Path = "experiments") -> None:
         self.root = resolve_editable_path(root)
 
     def experiment_dir(self, experiment_id: str) -> Path:
-        return resolve_editable_path(self.root / experiment_id)
+        return resolve_editable_path(self.root / experiment_id / "checkpoints")
 
     def save_member(
         self,

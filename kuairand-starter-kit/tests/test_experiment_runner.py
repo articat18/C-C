@@ -59,7 +59,7 @@ class ExperimentRunnerTests(unittest.TestCase):
             ],
             "test": [(20220429, "sealed", "sealed", "a", "t", 1.0, 1)],
         }
-        manager = CheckpointManager(Path(self.temporary.name) / "checkpoints")
+        manager = CheckpointManager(Path(self.temporary.name) / "experiments")
         with mock.patch(
             "experiment_engine.experiment_runner.load", return_value=loaded
         ), mock.patch(
@@ -74,6 +74,9 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["valid"]["primary"], 1.0)
         self.assertNotIn("test", result["metrics"])
         self.assertEqual(len(result["checkpoints"]), 1)
+        self.assertIn("baseline_comparison", result["diagnostics"])
+        self.assertIn("validation_subgroups", result["diagnostics"])
+        self.assertTrue(result["diagnostics"]["validation_subgroups"])
 
 
 if __name__ == "__main__":

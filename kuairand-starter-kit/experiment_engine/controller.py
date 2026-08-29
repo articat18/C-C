@@ -39,10 +39,20 @@ class ExperimentController:
     def run(self, spec: ExperimentSpec, *, verbose: bool = True) -> dict[str, Any]:
         self._preflight(spec)
         run_directory = resolve_editable_path(Path("experiments") / spec.experiment_id)
-        if run_directory.exists():
-            raise ControllerError(f"experiment directory already exists: {run_directory}")
-        run_directory.mkdir(parents=True)
-        _atomic_json_write(run_directory / "spec.json", spec.to_dict())
+        result_path = run_directory / "result.json"
+        failure_path = run_directory / "failure.json"
+        if result_path.exists() or failure_path.exists():
+            raise ControllerError(f"experiment has already been executed: {run_directory}")
+        run_directory.mkdir(parents=True, exist_ok=True)
+        spec_path = run_directory / "spec.json"
+        if spec_path.exists():
+            canonical_spec = ExperimentSpec.load(spec_path)
+            if canonical_spec.fingerprint() != spec.fingerprint():
+                raise ControllerError(
+                    f"submitted specification differs from canonical package: {spec_path}"
+                )
+        else:
+            _atomic_json_write(spec_path, spec.to_dict())
 
         started_at = _utc_now()
         started = time.monotonic()
@@ -51,7 +61,7 @@ class ExperimentController:
                 result = run_experiment(spec, verbose=verbose)
             comparison = self._compare_with_history(result)
             result["comparison"] = comparison
-            _atomic_json_write(run_directory / "result.json", result)
+            _atomic_json_write(result_path, result)
             record = {
                 "experiment_id": spec.experiment_id,
                 "status": "success",
@@ -62,8 +72,9 @@ class ExperimentController:
                 "completed_at": result["completed_at"],
                 "duration_seconds": result["duration_seconds"],
                 "metrics": result["metrics"],
+                "diagnostics": result.get("diagnostics", {}),
                 "comparison": comparison,
-                "result_path": (run_directory / "result.json").relative_to(
+                "result_path": result_path.relative_to(
                     resolve_editable_path("experiments").parent
                 ).as_posix(),
             }
@@ -82,7 +93,7 @@ class ExperimentController:
                 "error_type": type(exc).__name__,
                 "error": str(exc),
             }
-            _atomic_json_write(run_directory / "failure.json", failure)
+            _atomic_json_write(failure_path, failure)
             try:
                 self.registry.append(failure)
             except RegistryError:
@@ -132,12 +143,20 @@ class ExperimentController:
                     "hypothesis": hypothesis,
                 }
             )
-            path = experiments_root / f"{experiment_id}.json"
+            run_directory = experiments_root / experiment_id
+            path = run_directory / "spec.json"
             try:
+                run_directory.mkdir()
                 _exclusive_json_write(path, spec.to_dict())
             except FileExistsError:
                 used_ids.add(experiment_id)
                 continue
+            except Exception:
+                try:
+                    run_directory.rmdir()
+                except OSError:
+                    pass
+                raise
             return spec, path
         raise ControllerError("no experiment IDs remain")
 

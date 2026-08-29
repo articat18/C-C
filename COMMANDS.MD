@@ -10,7 +10,7 @@ Run all engine commands from the starter-kit directory:
 cd kuairand-starter-kit
 ```
 
-Relative paths such as `./KuaiRand-Pure/data`, `experiments/`, and `checkpoints/` assume this working directory.
+Relative paths such as `./KuaiRand-Pure/data` and `experiments/` assume this working directory.
 
 ## 2. Verify the installation
 
@@ -73,7 +73,30 @@ python3 -m experiment_engine.reproduce_baseline \
 
 This reproduction command is separate from candidate selection. It does not consume an experiment ID or add a record to the experiment registry.
 
-## 4. Create and run a controlled experiment
+## 4. Run Phase 2 dataset diagnostics
+
+Generate a deterministic profile using only train and validation data:
+
+```bash
+python3 -m experiment_engine.diagnostics profile \
+  --output analysis/dataset-profile.json
+```
+
+The report includes row counts, cardinalities, label balance, duration
+statistics, duplicate user-video rows, date/tab distributions, and train-to-
+validation unseen-entity and label-rate drift. It is safe to provide to a future
+Gemini orchestrator because it contains no test labels.
+
+Inspect it with:
+
+```bash
+cat analysis/dataset-profile.json
+```
+
+Every candidate `result.json` also records deterministic validation subgroup
+metrics and GAUC/nDCG/primary deltas against the protected published baseline.
+
+## 5. Create and run a controlled experiment
 
 Ask the controller to reserve the next unused experiment ID and create a
 normalized specification from an approved template:
@@ -84,15 +107,15 @@ python3 -m experiment_engine.controller create \
   --hypothesis "A BPR weight of 0.5 improves validation ranking."
 ```
 
-The allocator scans templates, standalone specifications, run directories, and
-the append-only registry. Currently, E0001 is completed and E0002 is reserved
-inside the checked-in ensemble example, so the next generated path is
-`experiments/E0003.json`. No E0002 model has been trained.
+The allocator scans templates, experiment packages, and the append-only registry.
+Currently, E0001 is completed and E0002 is reserved inside the checked-in
+ensemble example, so the next generated path is
+`experiments/E0003/spec.json`. No E0002 model has been trained.
 
 Open the generated file and change only the intended approved parameter:
 
 ```bash
-nano experiments/E0003.json
+nano experiments/E0003/spec.json
 ```
 
 For this example, set:
@@ -104,7 +127,7 @@ For this example, set:
 Then run the exact path returned by `create`:
 
 ```bash
-python3 -m experiment_engine.controller run experiments/E0003.json
+python3 -m experiment_engine.controller run experiments/E0003/spec.json
 ```
 
 The controller will:
@@ -133,10 +156,10 @@ Inspect the outputs:
 cat experiments/E0003/spec.json
 cat experiments/E0003/result.json
 cat experiments/index.jsonl
-ls -lh checkpoints/E0003
+ls -lh experiments/E0003/checkpoints
 ```
 
-## 5. Create another experiment
+## 6. Create another experiment
 
 Run the allocator again with one new hypothesis:
 
@@ -150,16 +173,16 @@ The output reports the reserved ID and path. Edit that file, change only the
 parameter named by the hypothesis, and run it. Always use the returned path;
 do not assume the next number or manually copy a template in a shared workspace.
 
-For example, if the allocator returns `experiments/E0004.json`:
+For example, if the allocator returns `experiments/E0004/spec.json`:
 
 ```bash
-nano experiments/E0004.json
-python3 -m experiment_engine.controller run experiments/E0004.json
+nano experiments/E0004/spec.json
+python3 -m experiment_engine.controller run experiments/E0004/spec.json
 ```
 
 Each experiment should test one clear change. Each experiment ID can be used only once, including failed runs.
 
-## 6. Run the ensemble template
+## 7. Run the ensemble template
 
 Create an ensemble specification with an automatically allocated ID:
 
@@ -170,16 +193,16 @@ python3 -m experiment_engine.controller create \
 ```
 
 Edit and run the exact path returned by the command. For example, if it returns
-`experiments/E0005.json`:
+`experiments/E0005/spec.json`:
 
 ```bash
-nano experiments/E0005.json
-python3 -m experiment_engine.controller run experiments/E0005.json
+nano experiments/E0005/spec.json
+python3 -m experiment_engine.controller run experiments/E0005/spec.json
 ```
 
 The ensemble trains three consecutive seeds and therefore takes longer than `bpr_hybrid`.
 
-## 7. Experiment specification reference
+## 8. Experiment specification reference
 
 A specification has this structure:
 
@@ -217,23 +240,28 @@ Initially approved templates:
 
 Specifications cannot contain shell commands, Python source, module paths, or unknown parameters. The engine rejects anything outside the approved schema and template catalog.
 
-## 8. Output locations
+## 9. Output locations
 
 For a generated experiment `EXPERIMENT_ID`, the engine creates:
 
 ```text
 experiments/EXPERIMENT_ID/
 ├── spec.json
-└── result.json
-
-checkpoints/EXPERIMENT_ID/
-├── member-00.npz
-└── member-00.json
+├── result.json
+└── checkpoints/
+    ├── member-00.npz
+    └── member-00.json
 
 experiments/index.jsonl
 ```
 
-- `spec.json` is the normalized specification that was executed.
+Before execution, a reserved package contains only `spec.json`. A successful
+run adds `result.json` and `checkpoints/`; a failed run adds `failure.json`.
+The package directory therefore records the experiment's lifecycle without a
+second standalone specification.
+
+- `spec.json` is created first as the editable, reserved experiment
+  specification and becomes the canonical specification when execution starts.
 - `result.json` contains validation metrics, runtime, environment details, checkpoints, and the keep/reject comparison.
 - `member-00.npz` contains model parameters.
 - `member-00.json` contains checkpoint metadata and member validation metrics.
@@ -241,7 +269,7 @@ experiments/index.jsonl
 
 An ensemble produces `member-00`, `member-01`, and `member-02` checkpoints.
 
-## 9. Understanding the result
+## 10. Understanding the result
 
 Important fields in `result.json` include:
 
@@ -278,7 +306,7 @@ Otherwise, the decision is `reject_or_refine`.
 
 The controller reports convergence after three consecutive successful experiments fail to improve the best validation primary by more than `0.002`.
 
-## 10. Handling failures
+## 11. Handling failures
 
 If a run fails, replace `EXPERIMENT_ID` with the returned experiment ID and inspect:
 
@@ -297,7 +325,7 @@ python3 -m unittest discover -s tests -v
 python3 -m experiment_engine.controller status
 ```
 
-## 11. Human-gated final test and submission
+## 12. Human-gated final test and submission
 
 Candidate runs never evaluate test data. After the team selects a genuine
 finalist, a human must create an approval receipt using the exact confirmation
@@ -329,14 +357,14 @@ runs/FINALIST_ID/submission.csv
 Finalization is one-time: it refuses to overwrite an existing final result or
 submission. Do not approve ordinary tuning runs.
 
-## 12. What does and does not call Gemini
+## 13. What does and does not call Gemini
 
 The following commands do not call Gemini:
 
 ```bash
 python3 -m experiment_engine.reproduce_baseline
 python3 -m experiment_engine.controller create --help
-python3 -m experiment_engine.controller run experiments/EXPERIMENT_ID.json
+python3 -m experiment_engine.controller run experiments/EXPERIMENT_ID/spec.json
 python3 -m experiment_engine.controller status
 python3 -m experiment_engine.approval FINALIST_ID \
   --approved-by "YOUR_NAME" \
@@ -369,8 +397,8 @@ python3 -m experiment_engine.controller create \
   --hypothesis "A BPR weight of 0.5 improves validation ranking."
 # Read the experiment ID and path printed by the command.
 # Edit that returned JSON so bpr_weight actually equals 0.5.
-nano experiments/E0003.json
-python3 -m experiment_engine.controller run experiments/E0003.json
+nano experiments/E0003/spec.json
+python3 -m experiment_engine.controller run experiments/E0003/spec.json
 python3 -m experiment_engine.controller status
 
 cat experiments/E0003/result.json
