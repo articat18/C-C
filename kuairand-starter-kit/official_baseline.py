@@ -1,10 +1,12 @@
-"""Immutable organizer-provided KuaiRand-Pure pointwise FM reference.
+"""Organizer-provided KuaiRand-Pure pointwise FM reference.
 
-This file intentionally keeps the original model and hyperparameters separate
-from experiment candidates.  Autonomous experiments must not edit it.  Run the
-enhanced score-reproducing candidate with::
+The model and training configuration are preserved separately from experiment
+candidates.  The logits implementation uses non-mutating dot products so the
+reference remains reliable on supported Python and NumPy versions.  Automated
+experiments must not edit this file.
 
-    python3 baseline.py --model bpr_ensemble
+The reproduction path intentionally evaluates validation only.  Hidden-test
+evaluation remains behind the final approval gate.
 """
 
 import argparse
@@ -37,7 +39,8 @@ class OfficialFM:
         embeddings = self.V[X]
         summed = embeddings.sum(1)
         interaction = 0.5 * (
-            (summed ** 2).sum(1) - (embeddings ** 2).sum((1, 2))
+            np.einsum("ij,ij->i", summed, summed)
+            - np.einsum("ijk,ijk->i", embeddings, embeddings)
         )
         return self.b + self.W[X].sum(1) + interaction, embeddings, summed
 
@@ -91,10 +94,16 @@ class OfficialFM:
 
 def run_official_fm(splits, k=16, lr=0.001, epochs=40, batch_size=8192,
                     patience=4, seed=0, verbose=True):
-    encoded, dimension = encode(splits)
+    """Train the official FM and return validation metrics only."""
+
+    development_splits = {
+        'train': splits['train'],
+        'valid': splits['valid'],
+        'test': [],
+    }
+    encoded, dimension = encode(development_splits)
     X_train, y_train, _ = encoded['train']
     X_valid, y_valid, users_valid = encoded['valid']
-    X_test, y_test, users_test = encoded['test']
     model = OfficialFM(dimension, k=k, lr=lr, seed=seed)
     rng = np.random.default_rng(seed)
     best = -1
@@ -129,10 +138,7 @@ def run_official_fm(splits, k=16, lr=0.001, epochs=40, batch_size=8192,
                     print(f"  early stop at epoch {epoch}")
                 break
     model.V, model.W, model.b = best_state
-    return {
-        'valid': evaluate(users_valid, y_valid, model.predict(X_valid)),
-        'test': evaluate(users_test, y_test, model.predict(X_test)),
-    }
+    return {'valid': evaluate(users_valid, y_valid, model.predict(X_valid))}
 
 
 if __name__ == '__main__':
@@ -144,7 +150,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
     print(f"loading {args.data_dir} ...")
-    data_splits = load(args.data_dir)
+    data_splits = load(args.data_dir, split_names=('train', 'valid'))
     print({name: len(rows) for name, rows in data_splits.items()}, f"fields={FIELDS}")
     results = run_official_fm(
         data_splits,
@@ -154,10 +160,9 @@ if __name__ == '__main__':
         seed=args.seed,
     )
     print(f"\n=== official_fm (seed={args.seed}) ===")
-    for split in ('valid', 'test'):
-        metrics = results[split]
-        print(
-            f"  {split:5s}  GAUC {metrics['GAUC']:.4f} | "
-            f"nDCG@5 {metrics['nDCG@5']:.4f} | "
-            f"primary {metrics['primary']:.4f}"
-        )
+    metrics = results['valid']
+    print(
+        f"  valid  GAUC {metrics['GAUC']:.4f} | "
+        f"nDCG@5 {metrics['nDCG@5']:.4f} | "
+        f"primary {metrics['primary']:.4f}"
+    )

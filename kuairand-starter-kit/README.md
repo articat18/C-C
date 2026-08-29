@@ -16,51 +16,55 @@ tar xzf KuaiRand-Pure.tar.gz
 
 ## Baseline Boundaries
 
-The organizers' original pointwise FM is frozen in `official_baseline.py`. It is kept separate from
-the experimental candidate models. Automated agents must not modify `official_baseline.py`, `data.py`,
-`evaluate.py`, or `baseline_scores.json`. Use the following command to verify the content hashes of
-these files:
+The organizer's pointwise FM is preserved in `official_baseline.py`, separately
+from experimental candidates. Its interaction calculation uses equivalent,
+non-mutating `np.einsum` dot products so the published implementation remains
+reliable on Python 3.9-3.14. Its model, optimizer, fields, hyperparameters, and
+early-stopping behavior are unchanged. Automated experiments must not modify
+`official_baseline.py`, `data.py`, `evaluate.py`, or `baseline_scores.json`.
+Verify their reviewed hashes with:
 
 ```bash
 python3 experiment_boundary.py --check
 ```
 
-The enhanced model that currently achieves the published score is a three-seed BPR ensemble; it
-should not be described as the "unmodified official FM."
+The BPR models in `baseline.py` are experimental candidates, not substitutes
+for official-baseline reproduction.
 
 ## Running the Models
 
-```bash
-python3 baseline.py --model bpr_ensemble
-```
-
-`--data_dir` defaults to `./KuaiRand-Pure/data`. Specify it explicitly if the data is stored elsewhere.
-
-Available `--model` values are `bpr_ensemble` (enhanced candidate), `fmbpr` (single-model experiment),
-`pop` (trivial baseline), and `random` (lower bound, used to sanity-check the evaluation code).
-
-Run the organizers' original implementation separately:
+Run the official baseline on train and public validation data:
 
 ```bash
 python3 official_baseline.py
 ```
 
+`--data_dir` defaults to `./KuaiRand-Pure/data`. Specify it explicitly if the data is stored elsewhere.
+
+Run an experimental candidate separately:
+
+```bash
+python3 baseline.py --model bpr_ensemble
+```
+
+Available candidate `--model` values are `bpr_ensemble`, `fmbpr`, `pop`, and
+`random`. `--data_dir` defaults to `./KuaiRand-Pure/data` for both commands.
+
 ## Reproduction and Controlled Experiments
 
-Run the stable three-seed BPR FM candidate with the published configuration and
-require every validation/test metric to be within `0.002` of
-`baseline_scores.json`:
+Run the official pointwise FM with the published configuration and require its
+public validation metrics to be within `0.002` of `baseline_scores.json`:
 
 ```bash
 python3 -m experiment_engine.reproduce_baseline
 ```
 
-This is an explicit baseline-reproduction command, not part of candidate model
-selection. The frozen pointwise implementation remains in `official_baseline.py`
-for provenance and semantics tests, but it is known to train unstably; the BPR
-ensemble is the score-reproducing implementation. The reproduction command
-trains on the full local dataset and can take several minutes. To also save its
-structured report under an agent-editable directory:
+This command uses the organizer's pointwise FM and unchanged training
+configuration. The loader requests only training and validation, selects the
+checkpoint using validation, and evaluates validation only. Test labels are not
+read or materialized, and the report records `test_accessed: false`. The command
+does not consume an experiment ID or participate in candidate selection. To save
+its structured report:
 
 ```bash
 python3 -m experiment_engine.reproduce_baseline --output runs/baseline-reproduction.json
@@ -114,7 +118,24 @@ fields and parameters are rejected. Add a reviewed template to
 `experiment_engine/experiment_templates.py` when a genuinely new experiment
 family is ready.
 
-## Vertex AI API (Phase 2)
+## Implementation Status
+
+The project follows the phases in the repository-level `ARCHITECTURE.md`:
+
+| Phase | Status |
+|---|---|
+| Phase 0: official-baseline reproduction | Complete |
+| Phase 1: deterministic experiment spine | Complete |
+| Phase 2: EDA and subgroup diagnostics | Next |
+| Phase 3: first bounded research cycle | Planned |
+| Phase 4: cleaning and historical features | Planned |
+| Phase 5: advanced ranking | Planned |
+| Phase 6: optional multi-agent expansion | Deferred |
+
+Gemini connectivity is scaffolding for the future single-agent orchestrator; it
+is not Phase 2 and does not currently choose or run experiments.
+
+## Future Gemini Orchestrator Setup
 
 We recommend creating a separate environment with Python 3.12. The current system default,
 Python 3.14, may be outside the version range verified by some agent SDKs.
@@ -173,7 +194,9 @@ of that file.
 
 ## Baseline Ladder
 
-Scores on the test set. **The FM row is the baseline to beat.**
+Published hidden-test reference scores are shown below. They are documentation,
+not output from the validation-only reproduction command. **The FM row is the
+baseline to beat.**
 
 | | GAUC | nDCG@5 | primary |
 |---|---|---|---|
@@ -232,13 +255,17 @@ row_id,user_id,video_id,score
 > test set, 3.06% of pairs are duplicated, with some appearing as many as 12 times. The pair therefore
 > cannot serve as a primary key.
 
-Generate and validate a submission:
+During development, generate and score only a validation example:
 
 ```bash
-python3 submit.py --make  --split test  submission.csv    # Generate a sample submission with the official FM baseline
-python3 submit.py --check --split test  submission.csv    # Validate its format and alignment
-python3 submit.py --score --split valid submission.csv    # Validate and score it (local validation data only)
+python3 submit.py validation-example.csv --make  --split valid
+python3 submit.py validation-example.csv --check --split valid
+python3 submit.py validation-example.csv --score --split valid
 ```
+
+Do not generate or score a test submission during development. After convergence,
+the approved final experiment uses `python3 -m experiment_engine.finalize E####`
+to load test once, produce the final CSV, and record its result.
 
 `--check` rejects an incorrect header, wrong row count, gaps in `row_id`, misaligned `user_id` or
 `video_id` values, and scores that are non-numeric, NaN, or Inf. **Run `--check` yourself before
@@ -315,8 +342,10 @@ You can therefore skip `baseline.py` entirely and use PyTorch, LightGBM, or xDee
 | | |
 |---|---|
 | `evaluate.py` | Metric implementations and all scoring conventions. **Do not modify.** |
-| `data.py` | Data loading, official splits, and feature encoding. Modify this file when adding features. |
-| `baseline.py` | Three baselines. FM is the one to beat. |
+| `data.py` | Protected canonical data loading, splits, and five-field encoding. |
+| `official_baseline.py` | Protected organizer pointwise FM with the Python 3.14-safe logits calculation. |
+| `baseline.py` | Experimental BPR candidates plus popularity and random references. |
 | `baseline_scores.json` | Official published scores, seed variance, and convergence parameters. |
 | `submit.py` | Generates and validates submission files. |
 | `ablation_features.py` | Feature ablation experiments that reproduce the finding that additional features do not help. |
+| `experiment_engine/` | Deterministic specifications, controller, runner, checkpoints, registry, approval, and finalization. |

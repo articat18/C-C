@@ -199,9 +199,11 @@ The test split is evaluated only for the final selected model after human approv
 
 - Add a regression test for the official FM logits path.
 - Verify that repeated calls do not mutate embeddings or cached intermediates.
-- Add a deterministic reproduction command for the stable BPR FM that matches
-  the published score; retain the frozen pointwise FM as a provenance reference.
-- Require scores to remain within `0.002` of the published baseline.
+- Correct the official pointwise FM logits with non-mutating dot products while
+  preserving the organizer's model and training configuration.
+- Add a deterministic, validation-only reproduction command for the official FM.
+- Require validation scores to remain within `0.002` of the published baseline.
+- Keep hidden-test data inaccessible throughout reproduction and experimentation.
 - Confirm random and popularity sanity scores.
 
 ### Phase 1: Experiment spine
@@ -215,8 +217,9 @@ The test split is evaluated only for the final selected model after human approv
 - **Complete:** require a human approval receipt before final test evaluation and submission.
 - **Complete:** restrict the future orchestrator to approved experiment templates instead of arbitrary code generation.
 
-### Phase 2: Diagnostics
+### Phase 2: EDA and diagnostics
 
+- Add deterministic dataset profiling and data-quality checks.
 - Add subgroup metric computation.
 - Generate a structured baseline-versus-candidate comparison.
 - Convert common diagnostic patterns into suggested next experiment families.
@@ -254,6 +257,6 @@ The orchestrator remains the only owner of experiment state, budgets, convergenc
 ## Immediate Milestone
 
 Phases 0 and 1 are complete. The next milestone is Phase 2: add deterministic
-subgroup diagnostics and baseline-versus-candidate reports so later experiment
-decisions—and eventually Gemini—have evidence explaining where a model improves
-or regresses.
+EDA, subgroup diagnostics, and baseline-versus-candidate reports so later
+experiment decisions—and eventually Gemini—have evidence explaining where a
+model improves or regresses.

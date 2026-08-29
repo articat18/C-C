@@ -53,13 +53,16 @@ baseline-aware even though E0001's older registry record predates that logic:
 
 ## 3. Reproduce the published baseline
 
-Run the stable three-seed BPR ensemble and compare its validation and test metrics with `baseline_scores.json`:
+Run the organizer's pointwise FM with its published configuration and compare
+its public validation metrics with `baseline_scores.json`:
 
 ```bash
 python3 -m experiment_engine.reproduce_baseline
 ```
 
-The command succeeds only if GAUC, nDCG@5, and primary score on both splits are within `0.002` of the published values. It can take several minutes.
+The command succeeds only if validation GAUC, nDCG@5, and primary score are
+within `0.002` of the published values. It does not encode, score, or report the
+test split. It can take about 40 seconds on a single CPU core.
 
 To save the structured report:
 
