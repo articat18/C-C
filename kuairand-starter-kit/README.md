@@ -67,12 +67,14 @@ python3 -m experiment_engine.reproduce_baseline --output runs/baseline-reproduct
 ```
 
 Candidate experiments use strict JSON specifications and a closed catalog of
-approved templates. Start by copying a template and assigning a new experiment
-ID; never run the checked-in example ID more than once:
+approved templates. Ask the controller to reserve the next unused experiment ID
+and create a default specification:
 
 ```bash
-cp experiments/templates/bpr_hybrid.json experiments/E0003.json
-# edit experiment_id, hypothesis, and approved scalar parameters
+python3 -m experiment_engine.controller create \
+  --template bpr_hybrid \
+  --hypothesis "A BPR weight of 0.5 improves validation ranking."
+# edit the approved scalar parameter in the returned path
 python3 -m experiment_engine.controller run experiments/E0003.json
 python3 -m experiment_engine.controller status
 ```
@@ -83,6 +85,22 @@ runner removes the real test rows before candidate feature encoding and reports
 validation metrics only. It writes atomic model checkpoints under `checkpoints/`,
 structured run evidence under `experiments/E####/`, and one append-only registry
 record to `experiments/index.jsonl`.
+
+Candidate decisions start from the protected published validation baseline,
+not an empty registry. A result is kept only when it improves that baseline or a
+better prior experiment by more than `0.002`.
+
+Test evaluation and final submission require a separate human approval receipt:
+
+```bash
+python3 -m experiment_engine.approval E0005 \
+  --approved-by "YOUR_NAME" \
+  --confirm I_APPROVE_FINAL_TEST_AND_SUBMISSION
+python3 -m experiment_engine.finalize E0005
+```
+
+Approval is bound to the experiment specification fingerprint. Finalization is
+one-time and refuses to overwrite its test result or submission.
 
 The initial approved templates are:
 

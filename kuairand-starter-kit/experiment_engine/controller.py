@@ -6,6 +6,7 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import signal
 import time
@@ -14,7 +15,8 @@ from typing import Any, Iterator
 from experiment_engine.checkpoints import _atomic_json_write
 from experiment_engine.experiment_runner import ExperimentTimeout, run_experiment
 from experiment_engine.experiment_spec import ExperimentSpec, SpecificationError
-from experiment_engine.experiment_templates import TemplateValidationError
+from experiment_engine.experiment_templates import TEMPLATES, TemplateValidationError
+from experiment_engine.reference_baseline import load_baseline_reference
 from experiment_engine.registry import ExperimentRegistry, RegistryError
 from experiment_boundary import (
     CONVERGENCE_EPSILON,
@@ -32,6 +34,7 @@ class ControllerError(RuntimeError):
 class ExperimentController:
     def __init__(self, registry: ExperimentRegistry | None = None) -> None:
         self.registry = registry or ExperimentRegistry()
+        self.baseline = load_baseline_reference()
 
     def run(self, spec: ExperimentSpec, *, verbose: bool = True) -> dict[str, Any]:
         self._preflight(spec)
@@ -86,6 +89,58 @@ class ExperimentController:
                 pass
             raise
 
+    def create(
+        self,
+        template: str,
+        hypothesis: str,
+        *,
+        seed: int = 0,
+    ) -> tuple[ExperimentSpec, Path]:
+        """Reserve the next available ID and write a default template spec."""
+
+        experiments_root = resolve_editable_path("experiments")
+        experiments_root.mkdir(parents=True, exist_ok=True)
+        used_ids = {
+            str(record.get("experiment_id"))
+            for record in self.registry.records()
+            if record.get("experiment_id")
+        }
+        for path in experiments_root.rglob("*.json"):
+            try:
+                with path.open(encoding="utf-8") as stream:
+                    value = json.load(stream)
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(value, dict) and isinstance(value.get("experiment_id"), str):
+                used_ids.add(value["experiment_id"])
+        used_ids.update(
+            path.name
+            for path in experiments_root.iterdir()
+            if path.is_dir() and path.name.startswith("E")
+        )
+
+        for number in range(1, 100_000_000):
+            experiment_id = f"E{number:04d}"
+            if experiment_id in used_ids:
+                continue
+            spec = ExperimentSpec.from_mapping(
+                {
+                    "schema_version": 1,
+                    "experiment_id": experiment_id,
+                    "template": template,
+                    "seed": seed,
+                    "hypothesis": hypothesis,
+                }
+            )
+            path = experiments_root / f"{experiment_id}.json"
+            try:
+                _exclusive_json_write(path, spec.to_dict())
+            except FileExistsError:
+                used_ids.add(experiment_id)
+                continue
+            return spec, path
+        raise ControllerError("no experiment IDs remain")
+
     def status(self) -> dict[str, Any]:
         successes = self.registry.successful_records()
         all_records = list(self.registry.records())
@@ -93,12 +148,45 @@ class ExperimentController:
             float(record["metrics"]["valid"]["primary"])
             for record in successes
         ]
+        best_candidate = max(
+            successes,
+            key=lambda record: float(record["metrics"]["valid"]["primary"]),
+            default=None,
+        )
+        best_candidate_primary = (
+            float(best_candidate["metrics"]["valid"]["primary"])
+            if best_candidate is not None
+            else None
+        )
+        if best_candidate_primary is not None and best_candidate_primary > self.baseline.primary:
+            best_source = best_candidate["experiment_id"]
+            best_primary = best_candidate_primary
+        else:
+            best_source = self.baseline.name
+            best_primary = self.baseline.primary
         return {
             "iterations": len(all_records),
             "successful": len(successes),
             "failed": len(all_records) - len(successes),
-            "best_valid_primary": max(primary_scores) if primary_scores else None,
-            "converged": _has_converged(primary_scores),
+            "baseline_valid_primary": self.baseline.primary,
+            "best_candidate_primary": best_candidate_primary,
+            "best_candidate_improvement": (
+                best_candidate_primary - self.baseline.primary
+                if best_candidate_primary is not None
+                else None
+            ),
+            "best_candidate_decision": (
+                "keep"
+                if best_candidate_primary is not None
+                and best_candidate_primary - self.baseline.primary
+                > CONVERGENCE_EPSILON
+                else "reject_or_refine" if best_candidate_primary is not None else None
+            ),
+            "best_valid_primary": best_primary,
+            "best_source": best_source,
+            "converged": _has_converged(
+                [self.baseline.primary, *primary_scores]
+            ),
             "remaining_iterations": max(0, MAX_ITERATIONS - len(all_records)),
         }
 
@@ -116,7 +204,7 @@ class ExperimentController:
             for record in records
             if record.get("status") == "success"
         ]
-        if _has_converged(scores):
+        if _has_converged([self.baseline.primary, *scores]):
             raise ControllerError(
                 "experiment loop has converged; human approval is required to continue"
             )
@@ -124,21 +212,23 @@ class ExperimentController:
     def _compare_with_history(self, result: dict[str, Any]) -> dict[str, Any]:
         previous = self.registry.successful_records()
         score = float(result["metrics"]["valid"]["primary"])
-        previous_best = max(
-            (
-                float(record["metrics"]["valid"]["primary"])
-                for record in previous
-            ),
-            default=None,
-        )
-        improvement = None if previous_best is None else score - previous_best
+        previous_best = self.baseline.primary
+        reference = self.baseline.name
+        for record in previous:
+            candidate_score = float(record["metrics"]["valid"]["primary"])
+            if candidate_score > previous_best:
+                previous_best = candidate_score
+                reference = record["experiment_id"]
+        improvement = score - previous_best
         return {
+            "reference": reference,
             "previous_best": previous_best,
+            "candidate": score,
             "improvement": improvement,
             "epsilon": CONVERGENCE_EPSILON,
             "decision": (
                 "keep"
-                if previous_best is None or improvement > CONVERGENCE_EPSILON
+                if improvement > CONVERGENCE_EPSILON
                 else "reject_or_refine"
             ),
         }
@@ -183,12 +273,34 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _exclusive_json_write(path: Path, value: Any) -> None:
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, sort_keys=True, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+    except Exception:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
     run_parser = subparsers.add_parser("run", help="run one approved experiment")
     run_parser.add_argument("spec", help="path to a JSON experiment specification")
     run_parser.add_argument("--quiet", action="store_true")
+    create_parser = subparsers.add_parser(
+        "create", help="create a spec with the next available experiment ID"
+    )
+    create_parser.add_argument("--template", required=True, choices=sorted(TEMPLATES))
+    create_parser.add_argument("--hypothesis", required=True)
+    create_parser.add_argument("--seed", type=int, default=0)
     subparsers.add_parser("status", help="show experiment-loop status")
     args = parser.parse_args()
 
@@ -198,6 +310,15 @@ def main() -> int:
             spec_path = resolve_editable_path(args.spec)
             spec = ExperimentSpec.load(spec_path)
             output = controller.run(spec, verbose=not args.quiet)
+        elif args.command == "create":
+            spec, path = controller.create(
+                args.template, args.hypothesis, seed=args.seed
+            )
+            output = {
+                "experiment_id": spec.experiment_id,
+                "path": path.relative_to(resolve_editable_path("experiments").parent).as_posix(),
+                "spec_fingerprint": spec.fingerprint(),
+            }
         else:
             output = controller.status()
     except (

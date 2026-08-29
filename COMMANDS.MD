@@ -32,16 +32,22 @@ Inspect the current experiment-loop status:
 python3 -m experiment_engine.controller status
 ```
 
-A new registry reports zero iterations:
+The current workspace has one completed experiment (`E0001`). Status is
+baseline-aware even though E0001's older registry record predates that logic:
 
 ```json
 {
-  "best_valid_primary": null,
+  "baseline_valid_primary": 0.6016,
+  "best_candidate_decision": "reject_or_refine",
+  "best_candidate_improvement": -0.0035498825073242424,
+  "best_candidate_primary": 0.5980501174926758,
+  "best_source": "stable_published_baseline",
+  "best_valid_primary": 0.6016,
   "converged": false,
   "failed": 0,
-  "iterations": 0,
-  "remaining_iterations": 50,
-  "successful": 0
+  "iterations": 1,
+  "remaining_iterations": 49,
+  "successful": 1
 }
 ```
 
@@ -64,13 +70,38 @@ python3 -m experiment_engine.reproduce_baseline \
 
 This reproduction command is separate from candidate selection. It does not consume an experiment ID or add a record to the experiment registry.
 
-## 4. Run the first controlled experiment
+## 4. Create and run a controlled experiment
 
-The included hybrid-BPR template uses experiment ID `E0001`:
+Ask the controller to reserve the next unused experiment ID and create a
+normalized specification from an approved template:
 
 ```bash
-python3 -m experiment_engine.controller run \
-  experiments/templates/bpr_hybrid.json
+python3 -m experiment_engine.controller create \
+  --template bpr_hybrid \
+  --hypothesis "A BPR weight of 0.5 improves validation ranking."
+```
+
+The allocator scans templates, standalone specifications, run directories, and
+the append-only registry. Currently, E0001 is completed and E0002 is reserved
+inside the checked-in ensemble example, so the next generated path is
+`experiments/E0003.json`. No E0002 model has been trained.
+
+Open the generated file and change only the intended approved parameter:
+
+```bash
+nano experiments/E0003.json
+```
+
+For this example, set:
+
+```json
+"bpr_weight": 0.5
+```
+
+Then run the exact path returned by `create`:
+
+```bash
+python3 -m experiment_engine.controller run experiments/E0003.json
 ```
 
 The controller will:
@@ -84,7 +115,8 @@ The controller will:
 7. Select the best checkpoint using validation primary score.
 8. Save checkpoints and structured results.
 9. Append one immutable summary to the experiment registry.
-10. Compare the result with the best previous experiment.
+10. Compare the result with the protected published baseline or a better prior
+    experiment.
 
 Check the status after training:
 
@@ -95,69 +127,51 @@ python3 -m experiment_engine.controller status
 Inspect the outputs:
 
 ```bash
-cat experiments/E0001/spec.json
-cat experiments/E0001/result.json
+cat experiments/E0003/spec.json
+cat experiments/E0003/result.json
 cat experiments/index.jsonl
-ls -lh checkpoints/E0001
+ls -lh checkpoints/E0003
 ```
 
 ## 5. Create another experiment
 
-Copy an approved template to a new specification file:
+Run the allocator again with one new hypothesis:
 
 ```bash
-cp experiments/templates/bpr_hybrid.json experiments/E0003.json
+python3 -m experiment_engine.controller create \
+  --template bpr_hybrid \
+  --hypothesis "Eight negatives per positive improve validation ranking."
 ```
 
-Open it in an editor:
+The output reports the reserved ID and path. Edit that file, change only the
+parameter named by the hypothesis, and run it. Always use the returned path;
+do not assume the next number or manually copy a template in a shared workspace.
+
+For example, if the allocator returns `experiments/E0004.json`:
 
 ```bash
-nano experiments/E0003.json
-```
-
-At minimum, assign the matching unused experiment ID and describe one hypothesis:
-
-```json
-{
-  "experiment_id": "E0003",
-  "hypothesis": "A BPR weight of 0.5 improves validation ranking."
-}
-```
-
-Change only the intended parameter. For this example:
-
-```json
-"bpr_weight": 0.5
-```
-
-Keep the rest of the copied JSON document intact, save it, and run:
-
-```bash
-python3 -m experiment_engine.controller run experiments/E0003.json
-python3 -m experiment_engine.controller status
+nano experiments/E0004.json
+python3 -m experiment_engine.controller run experiments/E0004.json
 ```
 
 Each experiment should test one clear change. Each experiment ID can be used only once, including failed runs.
 
 ## 6. Run the ensemble template
 
-Copy the ensemble template and assign a new ID:
+Create an ensemble specification with an automatically allocated ID:
 
 ```bash
-cp experiments/templates/bpr_ensemble.json experiments/E0004.json
-nano experiments/E0004.json
+python3 -m experiment_engine.controller create \
+  --template bpr_ensemble \
+  --hypothesis "Three seeds and a popularity prior reduce candidate variance."
 ```
 
-Ensure the JSON contains:
-
-```json
-"experiment_id": "E0004"
-```
-
-Then run it:
+Edit and run the exact path returned by the command. For example, if it returns
+`experiments/E0005.json`:
 
 ```bash
-python3 -m experiment_engine.controller run experiments/E0004.json
+nano experiments/E0005.json
+python3 -m experiment_engine.controller run experiments/E0005.json
 ```
 
 The ensemble trains three consecutive seeds and therefore takes longer than `bpr_hybrid`.
@@ -202,14 +216,14 @@ Specifications cannot contain shell commands, Python source, module paths, or un
 
 ## 8. Output locations
 
-For experiment `E0003`, the engine creates:
+For a generated experiment `EXPERIMENT_ID`, the engine creates:
 
 ```text
-experiments/E0003/
+experiments/EXPERIMENT_ID/
 ├── spec.json
 └── result.json
 
-checkpoints/E0003/
+checkpoints/EXPERIMENT_ID/
 ├── member-00.npz
 └── member-00.json
 
@@ -239,10 +253,12 @@ Important fields in `result.json` include:
     }
   },
   "comparison": {
-    "previous_best": null,
-    "improvement": null,
+    "reference": "stable_published_baseline",
+    "previous_best": 0.6016,
+    "candidate": 0.5981,
+    "improvement": -0.0035,
     "epsilon": 0.002,
-    "decision": "keep"
+    "decision": "reject_or_refine"
   }
 }
 ```
@@ -253,16 +269,18 @@ The primary metric is:
 primary = 0.5 * (GAUC + nDCG@5)
 ```
 
-An experiment is marked `keep` when it is the first successful experiment or improves the previous best validation primary by more than `0.002`. Otherwise, the decision is `reject_or_refine`.
+An experiment is marked `keep` only when it improves the protected published
+validation baseline, or a better previous experiment, by more than `0.002`.
+Otherwise, the decision is `reject_or_refine`.
 
 The controller reports convergence after three consecutive successful experiments fail to improve the best validation primary by more than `0.002`.
 
 ## 10. Handling failures
 
-If a run fails, inspect:
+If a run fails, replace `EXPERIMENT_ID` with the returned experiment ID and inspect:
 
 ```bash
-cat experiments/E0003/failure.json
+cat experiments/EXPERIMENT_ID/failure.json
 tail -n 1 experiments/index.jsonl
 ```
 
@@ -276,14 +294,51 @@ python3 -m unittest discover -s tests -v
 python3 -m experiment_engine.controller status
 ```
 
-## 11. What does and does not call Gemini
+## 11. Human-gated final test and submission
+
+Candidate runs never evaluate test data. After the team selects a genuine
+finalist, a human must create an approval receipt using the exact confirmation
+phrase:
+
+```bash
+python3 -m experiment_engine.approval FINALIST_ID \
+  --approved-by "YOUR_NAME" \
+  --confirm I_APPROVE_FINAL_TEST_AND_SUBMISSION
+```
+
+The approval is tied to the experiment's immutable specification fingerprint.
+It cannot authorize a modified specification and cannot be granted twice.
+
+Only after approval may the finalizer load test data, calculate final metrics,
+and write a submission:
+
+```bash
+python3 -m experiment_engine.finalize FINALIST_ID
+```
+
+It writes:
+
+```text
+experiments/FINALIST_ID/final-result.json
+runs/FINALIST_ID/submission.csv
+```
+
+Finalization is one-time: it refuses to overwrite an existing final result or
+submission. Do not approve ordinary tuning runs.
+
+## 12. What does and does not call Gemini
 
 The following commands do not call Gemini:
 
 ```bash
 python3 -m experiment_engine.reproduce_baseline
-python3 -m experiment_engine.controller run experiments/E0003.json
+python3 -m experiment_engine.controller create --help
+python3 -m experiment_engine.controller run experiments/EXPERIMENT_ID.json
 python3 -m experiment_engine.controller status
+python3 -m experiment_engine.approval FINALIST_ID \
+  --approved-by "YOUR_NAME" \
+  --confirm I_APPROVE_FINAL_TEST_AND_SUBMISSION
+python3 -m experiment_engine.finalize FINALIST_ID
 python3 -m unittest discover -s tests -v
 ```
 
@@ -306,8 +361,14 @@ python3 -m experiment_engine.controller status
 
 python3 -m experiment_engine.reproduce_baseline
 
-python3 -m experiment_engine.controller run experiments/templates/bpr_hybrid.json
+python3 -m experiment_engine.controller create \
+  --template bpr_hybrid \
+  --hypothesis "A BPR weight of 0.5 improves validation ranking."
+# Read the experiment ID and path printed by the command.
+# Edit that returned JSON so bpr_weight actually equals 0.5.
+nano experiments/E0003.json
+python3 -m experiment_engine.controller run experiments/E0003.json
 python3 -m experiment_engine.controller status
 
-cat experiments/E0001/result.json
+cat experiments/E0003/result.json
 ```

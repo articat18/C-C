@@ -206,11 +206,14 @@ The test split is evaluated only for the final selected model after human approv
 
 ### Phase 1: Experiment spine
 
-- Define and validate the JSON experiment schema.
-- Implement the deterministic runner and controller.
-- Add checkpoint management and an append-only run registry.
-- Add boundary, budget, timeout, and validation-only selection checks.
-- Initially restrict the orchestrator to approved experiment templates instead of arbitrary code generation.
+- **Complete:** define and validate the JSON experiment schema.
+- **Complete:** implement the deterministic runner and controller.
+- **Complete:** add checkpoint management and an append-only run registry.
+- **Complete:** add boundary, budget, timeout, and validation-only selection checks.
+- **Complete:** compare candidates against the protected published baseline.
+- **Complete:** allocate experiment IDs without overwriting existing work.
+- **Complete:** require a human approval receipt before final test evaluation and submission.
+- **Complete:** restrict the future orchestrator to approved experiment templates instead of arbitrary code generation.
 
 ### Phase 2: Diagnostics
 
@@ -250,4 +253,7 @@ The orchestrator remains the only owner of experiment state, budgets, convergenc
 
 ## Immediate Milestone
 
-The next milestone is to implement Phases 0 and 1 around the existing BPR candidate: baseline regression tests, an immutable experiment specification, deterministic execution, validation-only checkpoint selection, structured logging, and budget enforcement. This foundation supports all later feature and model experiments without introducing premature multi-agent coordination.
+Phases 0 and 1 are complete. The next milestone is Phase 2: add deterministic
+subgroup diagnostics and baseline-versus-candidate reports so later experiment
+decisions—and eventually Gemini—have evidence explaining where a model improves
+or regresses.

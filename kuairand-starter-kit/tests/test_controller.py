@@ -64,13 +64,58 @@ class ExperimentControllerTests(unittest.TestCase):
         ):
             result = controller.run(spec, verbose=False)
 
-        self.assertEqual(result["comparison"]["decision"], "keep")
+        self.assertEqual(result["comparison"]["decision"], "reject_or_refine")
+        self.assertEqual(
+            result["comparison"]["reference"], "stable_published_baseline"
+        )
+        self.assertAlmostEqual(result["comparison"]["previous_best"], 0.6016)
         self.assertTrue((self.root / "experiments" / "E0088" / "spec.json").is_file())
         self.assertTrue((self.root / "experiments" / "E0088" / "result.json").is_file())
         records = list(registry.records())
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["experiment_id"], "E0088")
         self.assertEqual(records[0]["status"], "success")
+
+    def test_create_skips_ids_already_present_in_specs(self):
+        registry = ExperimentRegistry(self.root / "index.jsonl")
+        controller = ExperimentController(registry)
+        experiments = self.root / "experiments"
+        templates = experiments / "templates"
+        templates.mkdir(parents=True)
+        (templates / "one.json").write_text(
+            '{"experiment_id":"E0001"}\n', encoding="utf-8"
+        )
+        (templates / "two.json").write_text(
+            '{"experiment_id":"E0002"}\n', encoding="utf-8"
+        )
+
+        def sandbox_path(value):
+            path = Path(value)
+            if path == Path("experiments"):
+                return experiments
+            return path
+
+        with mock.patch(
+            "experiment_engine.controller.resolve_editable_path",
+            side_effect=sandbox_path,
+        ):
+            spec, path = controller.create(
+                "bpr_hybrid", "Automatically allocate the next ID."
+            )
+
+        self.assertEqual(spec.experiment_id, "E0003")
+        self.assertEqual(path, experiments / "E0003.json")
+        self.assertTrue(path.is_file())
+
+    def test_status_uses_published_baseline_as_initial_best(self):
+        controller = ExperimentController(
+            ExperimentRegistry(self.root / "index.jsonl")
+        )
+        status = controller.status()
+        self.assertEqual(status["best_source"], "stable_published_baseline")
+        self.assertAlmostEqual(status["baseline_valid_primary"], 0.6016)
+        self.assertAlmostEqual(status["best_valid_primary"], 0.6016)
+        self.assertIsNone(status["best_candidate_decision"])
 
 
 if __name__ == "__main__":
