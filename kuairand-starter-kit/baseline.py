@@ -1,8 +1,9 @@
-"""KuaiRand-Pure baselines。
-  --model pop   : item popularity（官方 baseline，纯统计，不训练）
-  --model fm    : Factorization Machine（起步模型，学生从这里往上改）
-  --model random: 随机打分（下界，用来自检评测代码没坏）
-只依赖 numpy。用法见 README.md
+"""KuaiRand-Pure runnable models.
+
+``official_baseline.py`` preserves the organizer-provided pointwise FM.  This
+module contains experiment candidates and sanity-check models; in particular,
+``bpr_ensemble`` is the enhanced model that reproduces the published score but
+must not be presented as the unchanged official implementation.
 """
 import argparse, collections, time
 import numpy as np
@@ -203,8 +204,9 @@ def _standardize(x):
     x = np.asarray(x, dtype=np.float32)
     return (x - x.mean()) / (x.std() + 1e-8)
 
-def run_fm(splits, k=16, lr=0.001, epochs=40, bs=8192, patience=4, seed=0, verbose=True):
-    """Stable official baseline reproduction.
+def run_bpr_ensemble(splits, k=16, lr=0.001, epochs=40, bs=8192, patience=4,
+                     seed=0, verbose=True):
+    """Stable BPR ensemble that reproduces the published baseline score.
 
     The original pointwise Adam loop is unstable for these sparse embeddings: its
     loss saturates near 13.86 and produces random-level rankings.  Pairwise BPR is
@@ -238,7 +240,8 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--data_dir', default='./KuaiRand-Pure/data',
                     help='KuaiRand-Pure 解压后的 data 目录')
-    ap.add_argument('--model', default='fm', choices=['pop', 'fm', 'random', 'fmbpr'])
+    ap.add_argument('--model', default='bpr_ensemble',
+                    choices=['pop', 'random', 'fmbpr', 'bpr_ensemble'])
     ap.add_argument('--k', type=int, default=16)
     ap.add_argument('--lr', type=float, default=0.001)
     ap.add_argument('--epochs', type=int, default=40)
@@ -257,7 +260,8 @@ if __name__ == '__main__':
     def _run_fmbpr(s):
         return run_fm_bpr(s, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed)
     res = {'pop': run_pop, 'random': lambda s: run_random(s, a.seed),
-           'fm': lambda s: run_fm(s, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed),
+           'bpr_ensemble': lambda s: run_bpr_ensemble(
+               s, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed),
            'fmbpr': _run_fmbpr}[a.model](splits)
     print(f"\n=== {a.model} (seed={a.seed}) ===")
     for sp in ('valid', 'test'):

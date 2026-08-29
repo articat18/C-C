@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "experiment_id": "E0002",
+  "template": "bpr_ensemble",
+  "data_dir": "./KuaiRand-Pure/data",
+  "seed": 0,
+  "parameters": {
+    "embedding_dim": 16,
+    "learning_rate": 0.001,
+    "l2": 0.00001,
+    "patience": 4,
+    "negatives_per_positive": 4,
+    "bpr_weight": 1.0,
+    "bce_weight": 0.1,
+    "popularity_weight": 0.1
+  },
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "hypothesis": "A three-seed BPR ensemble with a small popularity prior reduces seed variance."
+}

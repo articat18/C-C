@@ -1,0 +1,4 @@
+# Vertex model access and the framework used by later agent phases.
+google-genai==1.75.0
+google-adk==1.35.2
+python-dotenv==1.2.3

@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "splits": {
+    "train": {
+      "authors": 6482,
+      "date_range": {
+        "distinct": 13,
+        "max": 20220421,
+        "min": 20220409
+      },
+      "duplicate_user_video_rows": 48362,
+      "duration": {
+        "max": 1177720.0,
+        "mean": 97879.89523640099,
+        "median": 70233.0,
+        "min": 0.0,
+        "p95": 286166.0,
+        "zero_rows": 24076
+      },
+      "label_counts": {
+        "0": 756991,
+        "1": 384121
+      },
+      "positive_rate": 0.33661989357749283,
+      "positive_rows": 384121,
+      "rows": 1141112,
+      "tab_counts": {
+        "0": 150013,
+        "1": 834876,
+        "10": 80,
+        "11": 417,
+        "12": 834,
+        "13": 283,
+        "14": 11,
+        "2": 39291,
+        "3": 3574,
+        "4": 75524,
+        "5": 3402,
+        "6": 29671,
+        "7": 333,
+        "8": 2551,
+        "9": 252
+      },
+      "users": 26210,
+      "videos": 7538
+    },
+    "valid": {
+      "authors": 5315,
+      "date_range": {
+        "distinct": 7,
+        "max": 20220428,
+        "min": 20220422
+      },
+      "duplicate_user_video_rows": 3572,
+      "duration": {
+        "max": 1177720.0,
+        "mean": 102819.66793425614,
+        "median": 70640.0,
+        "min": 0.0,
+        "p95": 304883.0,
+        "zero_rows": 2107
+      },
+      "label_counts": {
+        "0": 85777,
+        "1": 39132
+      },
+      "positive_rate": 0.313284070803545,
+      "positive_rows": 39132,
+      "rows": 124909,
+      "tab_counts": {
+        "0": 13726,
+        "1": 92672,
+        "10": 30,
+        "11": 121,
+        "12": 226,
+        "13": 57,
+        "14": 5,
+        "2": 3834,
+        "3": 177,
+        "4": 7877,
+        "5": 291,
+        "6": 5170,
+        "7": 84,
+        "8": 547,
+        "9": 92
+      },
+      "users": 22377,
+      "videos": 5951
+    }
+  },
+  "suggested_experiment_families": [
+    {
+      "family": "missing_duration_category",
+      "reason": "training data contains zero-duration rows"
+    },
+    {
+      "family": "duplicate_interaction_ablation",
+      "reason": "training data contains repeated user-video rows"
+    },
+    {
+      "family": "temporal_calibration",
+      "reason": "validation positive rate differs materially from training"
+    },
+    {
+      "family": "cold_user_prior",
+      "reason": "validation contains a material unseen-user fraction"
+    }
+  ],
+  "train_valid_drift": {
+    "valid_positive_rate_delta": -0.023335822773947856,
+    "valid_unseen_author_rate": 0.00011208159540145226,
+    "valid_unseen_user_rate": 0.01593159820349214,
+    "valid_unseen_video_rate": 0.0001360990801303349
+  }
+}
