@@ -120,6 +120,18 @@ JSON against the approved templates and parameter bounds before the orchestrator
 can create or run anything. A live model request is optional and may incur Vertex
 AI charges; configuration-only health checks never call the model.
 
+To ask Gemini for a proposal without training anything:
+
+```bash
+python3 -m agent.run --context analysis/dataset-profile.json
+```
+
+After reviewing the validated proposal, explicitly execute it with:
+
+```bash
+python3 -m agent.run --context analysis/dataset-profile.json --execute
+```
+
 Run the strongest candidates again with `--seed 1` and `--seed 2` using the
 controller after the initial search. All selection remains validation-only; test
 evaluation still requires a separate human approval receipt.
