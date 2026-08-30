@@ -132,6 +132,19 @@ After reviewing the validated proposal, explicitly execute it with:
 python3 -m agent.run --context analysis/dataset-profile.json --execute
 ```
 
+For a bounded multi-step autonomous Phase 3 run, use the agent loop. Omit
+`--execute` to collect proposals only:
+
+```bash
+python3 -m agent.autonomous \
+  --context analysis/dataset-profile.json \
+  --max-steps 3 \
+  --execute
+```
+
+Continuation after convergence remains human-gated unless `--auto-continue` is
+explicitly supplied. Decisions are appended to `runs/agent-decisions.jsonl`.
+
 Run the strongest candidates again with `--seed 1` and `--seed 2` using the
 controller after the initial search. All selection remains validation-only; test
 evaluation still requires a separate human approval receipt.
