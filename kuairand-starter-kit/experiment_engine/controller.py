@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import signal
 import time
-from typing import Any, Iterator
+from typing import Any, Iterator, Mapping
 
 from experiment_engine.checkpoints import _atomic_json_write
 from experiment_engine.experiment_runner import ExperimentTimeout, run_experiment
@@ -106,8 +106,9 @@ class ExperimentController:
         hypothesis: str,
         *,
         seed: int = 0,
+        parameters: Mapping[str, Any] | None = None,
     ) -> tuple[ExperimentSpec, Path]:
-        """Reserve the next available ID and write a default template spec."""
+        """Reserve an ID and write a validated template specification."""
 
         experiments_root = resolve_editable_path("experiments")
         experiments_root.mkdir(parents=True, exist_ok=True)
@@ -141,6 +142,7 @@ class ExperimentController:
                     "template": template,
                     "seed": seed,
                     "hypothesis": hypothesis,
+                    "parameters": dict(parameters or {}),
                 }
             )
             run_directory = experiments_root / experiment_id

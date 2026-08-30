@@ -106,12 +106,15 @@ class ExperimentControllerTests(unittest.TestCase):
             side_effect=sandbox_path,
         ):
             spec, path = controller.create(
-                "bpr_hybrid", "Automatically allocate the next ID."
+                "bpr_hybrid",
+                "Automatically allocate the next ID.",
+                parameters={"bpr_weight": 0.5},
             )
 
         self.assertEqual(spec.experiment_id, "E0003")
         self.assertEqual(path, experiments / "E0003" / "spec.json")
         self.assertTrue(path.is_file())
+        self.assertAlmostEqual(spec.parameters["bpr_weight"], 0.5)
 
     def test_status_uses_published_baseline_as_initial_best(self):
         controller = ExperimentController(

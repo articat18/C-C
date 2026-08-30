@@ -90,6 +90,22 @@ validation metrics only. It packages the specification, atomic model checkpoints
 and structured run evidence together under `experiments/E####/`, then writes one
 append-only registry record to `experiments/index.jsonl`.
 
+### Phase 3 bounded research workflow
+
+The Phase 3 helper reserves a one-variable-at-a-time BPR search from the closed
+template catalogue. It skips parameter/seed combinations already represented by
+an experiment specification:
+
+```bash
+python3 -m experiment_engine.phase3 plan --limit 8
+# copy the returned paths into the run command after reviewing the hypotheses
+python3 -m experiment_engine.phase3 run experiments/E####/spec.json
+```
+
+Run the strongest candidates again with `--seed 1` and `--seed 2` using the
+controller after the initial search. All selection remains validation-only; test
+evaluation still requires a separate human approval receipt.
+
 Candidate decisions start from the protected published validation baseline,
 not an empty registry. A result is kept only when it improves that baseline or a
 better prior experiment by more than `0.002`.
