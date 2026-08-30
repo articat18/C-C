@@ -196,12 +196,15 @@ The project follows the phases in the repository-level `ARCHITECTURE.md`:
 | Phase 1: deterministic experiment spine | Complete |
 | Phase 2: EDA and subgroup diagnostics | Complete |
 | Phase 3: first bounded research cycle | Complete (best candidate 0.60114; baseline 0.6016) |
-| Phase 4: cleaning and historical features | Next |
+| Phase 4: governed full-stack autonomy | Next (typed proposals and reviewed operators first) |
 | Phase 5: advanced ranking | Planned |
 | Phase 6: optional multi-agent expansion | Deferred |
 
-Gemini connectivity is scaffolding for the future single-agent orchestrator; it
-is not Phase 2 and does not currently choose or run experiments.
+Gemini connectivity currently proposes scalar changes within the two approved
+BPR templates. Phase 4 expands this into governed choices across cleaning,
+features, loss, model, and training strategy, followed by a sandboxed
+candidate-code path after the reviewed operator loop is reliable. See the
+repository-level `ARCHITECTURE.MD` for its safety gates and completion criteria.
 
 Run the deterministic Phase 2 dataset profile with:
 

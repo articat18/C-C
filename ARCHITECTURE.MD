@@ -220,7 +220,10 @@ The test split is evaluated only for the final selected model after human approv
 - **Complete:** compare candidates against the protected published baseline.
 - **Complete:** allocate experiment IDs without overwriting existing work.
 - **Complete:** require a human approval receipt before final test evaluation and submission.
-- **Complete:** restrict the future orchestrator to approved experiment templates instead of arbitrary code generation.
+- **Complete:** begin with approved experiment templates so the first research
+  cycle cannot execute arbitrary model-generated code. Phase 4 extends this
+  foundation with governed pipeline operators and a sandboxed candidate-code
+  path while retaining the same protected-file and hidden-test boundaries.
 
 ### Phase 2: EDA and diagnostics
 
@@ -237,11 +240,83 @@ The test split is evaluated only for the final selected model after human approv
 - **Complete:** store specifications, results, evidence, and decisions in the registry.
 - **Outcome:** no candidate exceeded the protected published validation primary of `0.6016`; the best candidate reached `0.60114`.
 
-### Phase 4: Cleaning and historical features
+### Phase 4: Governed full-stack autonomy
 
-- Run the cleaning and feature ablations in the defined order.
-- Change one feature family per experiment.
-- Use subgroup diagnostics to decide which feature family to inspect next.
+Phase 4 expands the agent from scalar tuning within two BPR templates into a
+single-agent research loop that can choose meaningful changes across cleaning,
+features, loss, model, and training strategy. The expansion remains governed:
+metric calculation, experiment state, test access, budgets, and finalization
+stay deterministic and outside the agent.
+
+#### 4A: Typed pipeline proposals
+
+- Replace the current `template + scalar parameters` proposal with a typed
+  contract containing the target pipeline stage, hypothesis, evidence from
+  prior diagnostics and experiments, transformation or experiment family,
+  bounded parameters, expected effect, and seed.
+- Allow the target stage to be one of `cleaning`, `features`, `loss`, `model`,
+  or `training`; reject unknown stages and transformations before execution.
+- Preserve the one-change rule: each iteration changes one feature family,
+  cleaning decision, loss decision, model decision, or training decision.
+- Include available operators, prior outcomes, convergence state, and subgroup
+  regressions in the agent context so the next proposal is evidence-driven.
+
+#### 4B: Reviewed operator catalogue
+
+- Add approved experiment families for missing-duration handling, duplicate
+  handling and weighting, item popularity and smoothed engagement rates,
+  user-author/tag/duration/music affinities, repeat exposure and recency, time
+  and distribution-shift features, and loss or sampling strategy.
+- Connect `candidates/history_features.py` to experiment specifications and the
+  runner so the agent can select leakage-safe historical features rather than
+  merely discuss them.
+- Run cleaning and feature ablations in the order defined by the data and
+  feature architecture, using subgroup diagnostics to choose the next family.
+- Require every operator to fit state on training data only, preserve row order
+  and count, and pass label-invariance and test-sealing checks.
+
+#### 4C: Sandboxed candidate-code changes
+
+- After the reviewed operator loop is reliable, allow the agent to propose a
+  source patch only under `candidates/`. A proposal records the patch, rationale,
+  affected contract, and content hash; experiment JSON continues to contain no
+  executable commands or arbitrary Python paths.
+- Apply and execute candidate patches in an isolated temporary worktree or
+  equivalent disposable workspace. Never give this path permission to change
+  `data.py`, `evaluate.py`, `official_baseline.py`, `baseline_scores.json`, the
+  controller, approval logic, registry, or prior experiment artifacts.
+- Before training, require path validation, syntax and import checks, static
+  policy checks, leakage tests, row-alignment tests, protected hashes, and the
+  full automated test suite. Reject the patch atomically if any gate fails.
+- Promote a successful candidate implementation into the reviewed catalogue
+  only with its exact diff, tests, specification, and result evidence attached.
+
+#### 4D: Autonomous reflection, recovery, and evidence
+
+- Let the agent inspect each result, decide `keep`, `reject`, `refine`, or
+  `change_direction`, and continue until the convergence or budget rule stops
+  the research window.
+- Add bounded recovery policies for invalid proposals, code errors, failed
+  checks, training errors, and timeouts. Recovery may repair, retry once, or
+  route to another approved direction without silently weakening a safety gate.
+- Record configuration and code diffs, agent reasoning, input and output token
+  counts, total agent wall-clock, training time, GPU-hours, failures, recovery
+  events, and manual interventions in the append-only run evidence.
+
+#### Phase 4 completion criteria
+
+Phase 4 is complete when the agent can, without routine human intervention:
+
+1. Inspect dataset, experiment, and subgroup evidence.
+2. Choose a pipeline stage and form a specific hypothesis.
+3. Configure an approved operator or propose one bounded candidate patch.
+4. Pass boundary, leakage, reproducibility, and test checks.
+5. Train and evaluate using validation only.
+6. Interpret the result and subgroup effects.
+7. Recover from a representative proposal or execution failure.
+8. Select and run the next experiment until convergence.
+9. Produce a complete audit summary including diffs, resources, recoveries, and
+   the number of manual interventions.
 
 ### Phase 5: Advanced ranking
 
@@ -262,6 +337,8 @@ The orchestrator remains the only owner of experiment state, budgets, convergenc
 
 ## Immediate Milestone
 
-Phases 0, 1, 2, and 3 are complete. The next milestone is Phase 4: run the
-cleaning and leakage-safe historical-feature ablations guided by Phase 2
-diagnostics.
+Phases 0, 1, 2, and 3 are complete. The next milestone is Phase 4A and 4B:
+expand the proposal contract, connect reviewed cleaning and leakage-safe
+historical-feature operators to the runner, and let the agent select them from
+Phase 2 evidence. Sandboxed candidate-code generation follows only after that
+operator loop passes its safety and recovery checks.
