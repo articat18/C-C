@@ -183,6 +183,15 @@ operators are:
 | `video_popularity_bucket` | `features` | Add a training-only video impression-count bucket |
 | `inverse_duplicate_frequency` | `cleaning` | Inverse-frequency sample label-free exact training-feature duplicates |
 | `smoothed_video_long_view_rate` | `features` | Bucket leave-one-out training video outcomes with a fixed smoothing prior |
+| `user_activity_bucket` | `features` | Bucket training-only user interaction counts |
+| `author_popularity_bucket` | `features` | Bucket training-only author impression counts |
+| `user_tab_affinity` | `features` | Add a training-vocabulary user-tab interaction |
+| `user_author_affinity` | `features` | Add a training-vocabulary user-author interaction |
+| `video_tab_affinity` | `features` | Add a training-vocabulary video-tab interaction |
+| `user_duration_affinity` | `features` | Add a user-duration-bucket interaction |
+| `user_video_exposure_bucket` | `features` | Bucket causal prior user-video exposure counts |
+| `video_recency_bucket` | `features` | Bucket days since the prior training appearance |
+| `date_period_bucket` | `features` | Bucket dates using training-fitted boundaries |
 
 Feature operators add the selected field without modifying protected `data.py`.
 The duplicate operator instead supplies row-aligned training weights and leaves

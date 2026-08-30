@@ -142,6 +142,37 @@ class FeaturePipelineTests(unittest.TestCase):
         with self.assertRaises(FeatureOperatorError):
             validate_pipeline_selection("cleaning", "smoothed_video_long_view_rate")
 
+    def test_reviewed_history_operators_are_individual_and_label_invariant(self):
+        operators = (
+            "user_activity_bucket",
+            "author_popularity_bucket",
+            "user_tab_affinity",
+            "user_author_affinity",
+            "video_tab_affinity",
+            "user_duration_affinity",
+            "user_video_exposure_bucket",
+            "video_recency_bucket",
+            "date_period_bucket",
+        )
+        splits = {"train": self.train, "valid": self.valid, "test": []}
+        changed = dict(splits)
+        changed["valid"] = [row[:6] + (1 - row[6],) for row in self.valid]
+        for operator_name in operators:
+            with self.subTest(operator=operator_name):
+                first, first_dimension = encode_candidate_splits(
+                    splits, operator_name=operator_name
+                )
+                second, second_dimension = encode_candidate_splits(
+                    changed, operator_name=operator_name
+                )
+                self.assertEqual(first_dimension, second_dimension)
+                self.assertEqual(first["train"][0].shape[1], 6)
+                self.assertEqual(first["valid"][0].shape[1], 6)
+                np.testing.assert_array_equal(
+                    first["valid"][0], second["valid"][0]
+                )
+                validate_pipeline_selection("features", operator_name)
+
     def test_weighted_sampler_normalizes_pool_probabilities(self):
         rng = mock.Mock()
         rng.choice.return_value = np.asarray([2])

@@ -13,6 +13,7 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
+from candidates.history_features import fit_history_feature, history_feature_value
 from data import FIELDS, encode
 
 
@@ -20,6 +21,18 @@ Row = tuple[int, str, str, str, str, float, int]
 Splits = Mapping[str, Sequence[Row]]
 PIPELINE_STAGES = ("cleaning", "features", "loss", "model", "training")
 ENGAGEMENT_PRIOR = 20.0
+HISTORY_OPERATOR_FIELDS = {
+    "video_popularity_bucket": "video_popularity",
+    "user_activity_bucket": "user_activity",
+    "author_popularity_bucket": "author_popularity",
+    "user_tab_affinity": "user_tab",
+    "user_author_affinity": "user_author",
+    "video_tab_affinity": "video_tab",
+    "user_duration_affinity": "user_duration",
+    "user_video_exposure_bucket": "user_video_exposure",
+    "video_recency_bucket": "video_recency",
+    "date_period_bucket": "date_period",
+}
 
 
 class FeatureOperatorError(ValueError):
@@ -70,6 +83,42 @@ OPERATORS: dict[str, FeatureOperator] = {
             "Bucket each video's training-only long-view rate with a fixed "
             "Bayesian smoothing prior."
         ),
+    ),
+    "user_activity_bucket": FeatureOperator(
+        "user_activity_bucket", ("features",), "user_activity",
+        "Bucket each user's training-only interaction count.",
+    ),
+    "author_popularity_bucket": FeatureOperator(
+        "author_popularity_bucket", ("features",), "author_popularity",
+        "Bucket each author's training-only impression count.",
+    ),
+    "user_tab_affinity": FeatureOperator(
+        "user_tab_affinity", ("features",), "user_tab",
+        "Add a training-vocabulary user and recommendation-tab interaction.",
+    ),
+    "user_author_affinity": FeatureOperator(
+        "user_author_affinity", ("features",), "user_author",
+        "Add a training-vocabulary user and author interaction.",
+    ),
+    "video_tab_affinity": FeatureOperator(
+        "video_tab_affinity", ("features",), "video_tab",
+        "Add a training-vocabulary video and recommendation-tab interaction.",
+    ),
+    "user_duration_affinity": FeatureOperator(
+        "user_duration_affinity", ("features",), "user_duration",
+        "Add a user and training-fitted duration-bucket interaction.",
+    ),
+    "user_video_exposure_bucket": FeatureOperator(
+        "user_video_exposure_bucket", ("features",), "user_video_exposure",
+        "Bucket prior user-video exposures using training history only.",
+    ),
+    "video_recency_bucket": FeatureOperator(
+        "video_recency_bucket", ("features",), "video_recency",
+        "Bucket days since the video's prior training appearance.",
+    ),
+    "date_period_bucket": FeatureOperator(
+        "date_period_bucket", ("features",), "date_period",
+        "Bucket interaction dates using training-fitted time boundaries.",
     ),
 }
 
@@ -216,15 +265,8 @@ def operator_diagnostics(
 def _fit_operator(operator_name: str, train: Sequence[Row]) -> dict[str, Any]:
     if operator_name == "missing_duration_category":
         return {}
-    if operator_name == "video_popularity_bucket":
-        counts = collections.Counter(row[2] for row in train)
-        values = np.asarray(list(counts.values()), dtype=np.float64)
-        edges = (
-            np.quantile(values, np.linspace(0, 1, 11)[1:-1])
-            if values.size
-            else np.asarray([], dtype=np.float64)
-        )
-        return {"counts": counts, "edges": edges}
+    if operator_name in HISTORY_OPERATOR_FIELDS:
+        return fit_history_feature(HISTORY_OPERATOR_FIELDS[operator_name], train)
     if operator_name == "smoothed_video_long_view_rate":
         impressions = collections.Counter(row[2] for row in train)
         positives: collections.Counter[str] = collections.Counter()
@@ -263,9 +305,13 @@ def _operator_value(
 ) -> str:
     if operator_name == "missing_duration_category":
         return "missing" if row[5] == 0 else "observed"
-    if operator_name == "video_popularity_bucket":
-        count = state["counts"].get(row[2], 0)
-        return str(int(np.searchsorted(state["edges"], count)))
+    if operator_name in HISTORY_OPERATOR_FIELDS:
+        return history_feature_value(
+            HISTORY_OPERATOR_FIELDS[operator_name],
+            row,
+            state,
+            training=training,
+        )
     if operator_name == "smoothed_video_long_view_rate":
         rate = _smoothed_video_rate(row, state, training=training)
         return str(int(np.searchsorted(state["edges"], rate)))

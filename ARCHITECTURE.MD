@@ -263,19 +263,21 @@ stay deterministic and outside the agent.
 
 #### 4B: Reviewed operator catalogue
 
-- **In progress:** the candidate-owned encoder and the reviewed
+- **Complete:** the candidate-owned encoder and the reviewed
   `missing_duration_category`, `video_popularity_bucket`, and
   `inverse_duplicate_frequency` operators, plus the training-fitted
   `smoothed_video_long_view_rate` feature, are integrated through training,
   checkpoints, and finalization. Duplicate weighting preserves row alignment
   while sampling label-free exact training-feature tuples in inverse proportion
   to their frequency. Smoothed item outcomes use leave-one-out training labels
-  and a fixed prior. Add the remaining approved experiment families for
-  user-author/tag/duration/music affinities, repeat exposure and recency, time
-  and distribution-shift features, and loss or sampling strategy.
-- Connect the remaining operators in `candidates/history_features.py` to experiment specifications and the
-  runner so the agent can select leakage-safe historical features rather than
-  merely discuss them.
+  and a fixed prior. Individually selectable operators now cover user activity,
+  author popularity, user-tab, user-author, video-tab, user-duration, causal
+  repeat exposure, video recency, and date period, while the bounded scalar
+  contract covers loss and sampling strategy. Tag and music identifiers are not
+  exposed by the protected five-field loader and remain intentionally excluded.
+- **Complete:** connect the fields in `candidates/history_features.py` to
+  experiment specifications and the runner so the agent can select one
+  leakage-safe historical feature rather than enabling the legacy bundle.
 - Run cleaning and feature ablations in the order defined by the data and
   feature architecture, using subgroup diagnostics to choose the next family.
 - Require every operator to fit state on training data only, preserve row order
@@ -347,8 +349,6 @@ The orchestrator remains the only owner of experiment state, budgets, convergenc
 
 ## Immediate Milestone
 
-Phases 0, 1, 2, 3, and 4A are complete. Phase 4B is in progress: the first
-cleaning, item-rate, and duplicate-weighting operators are integrated; add
-affinity, exposure, recency, and time operators one family at a time. Sandboxed
-candidate-code generation follows only after that operator loop passes its
-safety and recovery checks.
+Phases 0, 1, 2, 3, 4A, and 4B are complete. The immediate milestone is Phase
+4C: add sandboxed candidate-code proposals with atomic rejection, then complete
+the Phase 4D recovery and audit summary.
