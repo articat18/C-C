@@ -100,6 +100,9 @@ an experiment specification:
 python3 -m experiment_engine.phase3 plan --limit 8
 # copy the returned paths into the run command after reviewing the hypotheses
 python3 -m experiment_engine.phase3 run experiments/E####/spec.json
+# after selecting a strong result, reserve seed replications
+python3 -m experiment_engine.phase3 replicate experiments/E####/spec.json \
+  --seeds 1 2
 ```
 
 Run the strongest candidates again with `--seed 1` and `--seed 2` using the

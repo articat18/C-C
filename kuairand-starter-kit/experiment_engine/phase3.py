@@ -79,6 +79,30 @@ def run_phase3(
     return results
 
 
+def replicate_phase3(
+    controller: ExperimentController,
+    source_path: str | Path,
+    seeds: list[int],
+) -> list[Path]:
+    """Create seed replications of a successful Phase 3 specification."""
+    source = ExperimentSpec.load(source_path)
+    if not source.hypothesis.startswith("Phase 3:"):
+        raise ValueError(f"not a Phase 3 specification: {source_path}")
+    paths = []
+    for seed in seeds:
+        if seed == source.seed:
+            continue
+        hypothesis = f"{source.hypothesis} Replication seed {seed}."
+        _, path = controller.create(
+            source.template,
+            hypothesis,
+            seed=seed,
+            parameters=dict(source.parameters),
+        )
+        paths.append(path)
+    return paths
+
+
 def _load_optional(path: Path) -> ExperimentSpec | None:
     try:
         return ExperimentSpec.load(path)
@@ -99,18 +123,25 @@ def main() -> int:
     run = subparsers.add_parser("run", help="run planned Phase 3 specifications")
     run.add_argument("spec", nargs="+", help="paths returned by plan")
     run.add_argument("--quiet", action="store_true")
+    replicate = subparsers.add_parser("replicate", help="create multi-seed replications")
+    replicate.add_argument("spec")
+    replicate.add_argument("--seeds", nargs="+", type=int, required=True)
     args = parser.parse_args()
     controller = ExperimentController()
     if args.command == "plan":
         print(json.dumps([str(path) for path in plan_phase3(
             controller, limit=args.limit, seed=args.seed
         )], indent=2))
-    else:
+    elif args.command == "run":
         results = run_phase3(controller, args.spec, verbose=not args.quiet)
         print(json.dumps([
             {"experiment_id": result["experiment_id"], "metrics": result["metrics"]}
             for result in results
         ], indent=2))
+    else:
+        print(json.dumps([str(path) for path in replicate_phase3(
+            controller, args.spec, args.seeds
+        )], indent=2))
     return 0
 
 
