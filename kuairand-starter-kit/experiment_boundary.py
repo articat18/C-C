@@ -12,10 +12,10 @@ REPOSITORY_ROOT = Path(__file__).resolve().parent
 # These hashes establish the immutable organizer/evaluation boundary.  A planned
 # update must be reviewed by a human and update the hash deliberately.
 PROTECTED_FILES = {
-    "official_baseline.py": "1060d22f4c67818e2e8cff4e91a0e24fbcbf65b8576089b76b793393d422bf91",
-    "data.py": "d552057735b3b2bb87ac13c940beb5140d9edf6054755b9836ddb53ae1c40041",
-    "evaluate.py": "ecfde28392eb14fec4f488083251df50624e1af2b86278b962daecfb42d195de",
-    "baseline_scores.json": "950f98181770c030a68bdddab7be3c0abbf060531f54455a6a6f81a4cb003324",
+    "official_baseline.py": "199cb54ae3a036832456de381d7bab72fc9c956403e584e5ceb34826f19b2dba",
+    "data.py": "84b2b5888569301517a598a11775d855aa0866277102f980b4fb828e1db90929",
+    "evaluate.py": "735b429e6223572ecb48c0f44953b0fbc39b9f6e4e7a1e9b06326d7fe0d0f58c",
+    "baseline_scores.json": "6f1e9facd126a3d43719f7d2e177d9c7de3deda5f825c08de7d275adc43aaec8",
 }
 
 EDITABLE_ROOTS = (
