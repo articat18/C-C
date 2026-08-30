@@ -105,6 +105,16 @@ python3 -m experiment_engine.phase3 replicate experiments/E####/spec.json \
   --seeds 1 2
 ```
 
+The deterministic policy layer can execute the next approved candidates without
+manual per-experiment commands:
+
+```bash
+python3 -m experiment_engine.orchestrator --max-runs 3 --quiet
+```
+
+Add `--auto-continue` only when you explicitly want the orchestrator to open a
+new, documented convergence window after the current one stops.
+
 Run the strongest candidates again with `--seed 1` and `--seed 2` using the
 controller after the initial search. All selection remains validation-only; test
 evaluation still requires a separate human approval receipt.

@@ -40,8 +40,8 @@ def plan_phase3(
     if limit < 1:
         raise ValueError("limit must be positive")
     paths: list[Path] = []
-    existing = {
-        _signature(spec)
+    existing: dict[tuple[str, int, tuple[tuple[str, Any], ...]], Path] = {
+        _signature(spec): path
         for path in Path("experiments").glob("E*/spec.json")
         if (spec := _load_optional(path)) is not None
     }
@@ -54,6 +54,10 @@ def plan_phase3(
         normalized = get_template(template).normalize_parameters({parameter: value})
         signature = (template, seed, tuple(sorted(normalized.items())))
         if signature in existing:
+            existing_path = existing[signature]
+            package = existing_path.parent
+            if not (package / "result.json").exists() and not (package / "failure.json").exists():
+                paths.append(existing_path)
             continue
         spec, path = controller.create(
             template,
@@ -61,7 +65,7 @@ def plan_phase3(
             seed=seed,
             parameters={parameter: value},
         )
-        existing.add(_signature(spec))
+        existing[_signature(spec)] = path
         paths.append(path)
     return paths
 
