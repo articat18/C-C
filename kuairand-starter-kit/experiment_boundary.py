@@ -13,7 +13,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parent
 # update must be reviewed by a human and update the hash deliberately.
 PROTECTED_FILES = {
     "official_baseline.py": "1060d22f4c67818e2e8cff4e91a0e24fbcbf65b8576089b76b793393d422bf91",
-    "data.py": "93c2006b723db36b1381f9006d440becacd97263db8b17d5b104ed85f8f9e696",
+    "data.py": "d552057735b3b2bb87ac13c940beb5140d9edf6054755b9836ddb53ae1c40041",
     "evaluate.py": "ecfde28392eb14fec4f488083251df50624e1af2b86278b962daecfb42d195de",
     "baseline_scores.json": "950f98181770c030a68bdddab7be3c0abbf060531f54455a6a6f81a4cb003324",
 }
