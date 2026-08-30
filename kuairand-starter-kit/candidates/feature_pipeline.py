@@ -19,6 +19,7 @@ from data import FIELDS, encode
 Row = tuple[int, str, str, str, str, float, int]
 Splits = Mapping[str, Sequence[Row]]
 PIPELINE_STAGES = ("cleaning", "features", "loss", "model", "training")
+ENGAGEMENT_PRIOR = 20.0
 
 
 class FeatureOperatorError(ValueError):
@@ -59,6 +60,15 @@ OPERATORS: dict[str, FeatureOperator] = {
         description=(
             "Downweight repeated training interactions by the inverse frequency "
             "of their label-free exact feature tuple."
+        ),
+    ),
+    "smoothed_video_long_view_rate": FeatureOperator(
+        name="smoothed_video_long_view_rate",
+        stages=("features",),
+        field_name="video_long_view_rate",
+        description=(
+            "Bucket each video's training-only long-view rate with a fixed "
+            "Bayesian smoothing prior."
         ),
     ),
 }
@@ -110,7 +120,10 @@ def encode_candidate_splits(
 
     encoded, base_dimension = encode(splits)
     state = _fit_operator(operator_name, splits["train"])
-    train_values = [_operator_value(operator_name, row, state) for row in splits["train"]]
+    train_values = [
+        _operator_value(operator_name, row, state, training=True)
+        for row in splits["train"]
+    ]
     vocabulary: dict[str, int] = {}
     for value in train_values:
         if value not in vocabulary:
@@ -122,7 +135,12 @@ def encode_candidate_splits(
         X, labels, users = encoded[split_name]
         column = np.empty((len(rows), 1), dtype=np.int32)
         for index, row in enumerate(rows):
-            value = _operator_value(operator_name, row, state)
+            value = _operator_value(
+                operator_name,
+                row,
+                state,
+                training=split_name == "train",
+            )
             column[index, 0] = vocabulary.get(value, unknown) + base_dimension
         enriched[split_name] = (
             np.concatenate((X, column), axis=1),
@@ -168,6 +186,15 @@ def operator_diagnostics(
     if operator_name not in OPERATORS:
         raise FeatureOperatorError(f"unknown operator {operator_name!r}")
     if operator_name != "inverse_duplicate_frequency":
+        if operator_name == "smoothed_video_long_view_rate":
+            state = _fit_operator(operator_name, splits["train"])
+            return {
+                "smoothing_prior": state["prior"],
+                "training_global_long_view_rate": state["global_rate"],
+                "training_videos": len(state["impressions"]),
+                "uses_training_labels": True,
+                "uses_training_split_only": True,
+            }
         return {}
     counts = collections.Counter(_duplicate_key(row) for row in splits["train"])
     duplicated = [count for count in counts.values() if count > 1]
@@ -198,15 +225,50 @@ def _fit_operator(operator_name: str, train: Sequence[Row]) -> dict[str, Any]:
             else np.asarray([], dtype=np.float64)
         )
         return {"counts": counts, "edges": edges}
+    if operator_name == "smoothed_video_long_view_rate":
+        impressions = collections.Counter(row[2] for row in train)
+        positives: collections.Counter[str] = collections.Counter()
+        for row in train:
+            positives[row[2]] += int(row[6])
+        total_positives = sum(positives.values())
+        global_rate = total_positives / len(train) if train else 0.0
+        state = {
+            "impressions": impressions,
+            "positives": positives,
+            "global_rate": global_rate,
+            "total_positives": total_positives,
+            "total_rows": len(train),
+            "prior": ENGAGEMENT_PRIOR,
+        }
+        rates = np.asarray(
+            [_smoothed_video_rate(row, state, training=True) for row in train],
+            dtype=np.float64,
+        )
+        edges = (
+            np.quantile(rates, np.linspace(0, 1, 11)[1:-1])
+            if rates.size
+            else np.asarray([], dtype=np.float64)
+        )
+        state["edges"] = edges
+        return state
     raise FeatureOperatorError(f"operator {operator_name!r} cannot be encoded")
 
 
-def _operator_value(operator_name: str, row: Row, state: Mapping[str, Any]) -> str:
+def _operator_value(
+    operator_name: str,
+    row: Row,
+    state: Mapping[str, Any],
+    *,
+    training: bool = False,
+) -> str:
     if operator_name == "missing_duration_category":
         return "missing" if row[5] == 0 else "observed"
     if operator_name == "video_popularity_bucket":
         count = state["counts"].get(row[2], 0)
         return str(int(np.searchsorted(state["edges"], count)))
+    if operator_name == "smoothed_video_long_view_rate":
+        rate = _smoothed_video_rate(row, state, training=training)
+        return str(int(np.searchsorted(state["edges"], rate)))
     raise FeatureOperatorError(f"operator {operator_name!r} cannot transform rows")
 
 
@@ -214,3 +276,31 @@ def _duplicate_key(row: Row) -> tuple[object, ...]:
     """Return an exact feature tuple without consulting the outcome label."""
 
     return tuple(row[:-1])
+
+
+def _smoothed_video_rate(
+    row: Row,
+    state: Mapping[str, Any],
+    *,
+    training: bool,
+) -> float:
+    """Return a train-fitted rate, leaving out the current training outcome."""
+
+    count = state["impressions"].get(row[2], 0)
+    positives = state["positives"].get(row[2], 0)
+    global_rate = state["global_rate"]
+    if training:
+        count -= 1
+        positives -= int(row[6])
+        remaining_rows = state["total_rows"] - 1
+        global_rate = (
+            (state["total_positives"] - int(row[6])) / remaining_rows
+            if remaining_rows
+            else 0.0
+        )
+    if count <= 0:
+        return float(global_rate)
+    return float(
+        (positives + state["prior"] * global_rate)
+        / (count + state["prior"])
+    )

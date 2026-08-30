@@ -53,6 +53,20 @@ class ExperimentSpecTests(unittest.TestCase):
         self.assertEqual(spec.stage, "cleaning")
         self.assertEqual(spec.operator, "inverse_duplicate_frequency")
 
+    def test_schema_two_accepts_smoothed_video_rate_operator(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "stage": "features",
+            "operator": "smoothed_video_long_view_rate",
+            "evidence": "Item engagement rates differ in the training split.",
+            "expected_effect": "Improve ordering with a smoothed item prior.",
+            "parameters": {},
+        })
+        spec = ExperimentSpec.from_mapping(value)
+        self.assertEqual(spec.stage, "features")
+        self.assertEqual(spec.operator, "smoothed_video_long_view_rate")
+
     def test_schema_two_rejects_operator_plus_scalar_change(self):
         value = valid_spec()
         value.update({

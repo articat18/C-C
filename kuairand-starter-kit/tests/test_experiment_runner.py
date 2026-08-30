@@ -143,6 +143,60 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertEqual(diagnostics["duplicate_groups"], 1)
         self.assertEqual(diagnostics["effective_training_mass"], 2.0)
 
+    def test_runner_records_smoothed_video_rate_diagnostics(self):
+        spec = ExperimentSpec.from_mapping(
+            {
+                "schema_version": 2,
+                "experiment_id": "E0097",
+                "template": "bpr_hybrid",
+                "stage": "features",
+                "operator": "smoothed_video_long_view_rate",
+                "hypothesis": "Training-only smoothed item outcomes improve ranking.",
+                "evidence": "Videos have different training long-view rates.",
+                "expected_effect": "Add a low-variance item outcome prior.",
+                "parameters": {},
+                "budget": {"max_epochs": 1, "max_wall_seconds": 60},
+            }
+        )
+        model = SimpleNamespace(
+            V=np.ones((4, 2), dtype=np.float32),
+            W=np.zeros(4, dtype=np.float32),
+            b=np.float32(0),
+            predict=lambda features: np.asarray([0.9, 0.1], dtype=np.float32),
+        )
+        loaded = {
+            "train": [
+                (20220408, "u", "v1", "a", "t", 1.0, 1),
+                (20220408, "u", "v2", "a", "t", 1.0, 0),
+            ],
+            "valid": [
+                (20220422, "u", "v1", "a", "t", 1.0, 1),
+                (20220422, "u", "v2", "a", "t", 1.0, 0),
+            ],
+        }
+
+        def fake_fit(splits, **kwargs):
+            encoded, _ = kwargs["encode_fn"](splits)
+            self.assertIsNone(kwargs["train_sample_weights"])
+            self.assertEqual(encoded["train"][0].shape[1], 6)
+            self.assertEqual(encoded["valid"][0].shape[1], 6)
+            return model, encoded
+
+        manager = CheckpointManager(Path(self.temporary.name) / "experiments")
+        with mock.patch(
+            "experiment_engine.experiment_runner.load", return_value=loaded
+        ), mock.patch(
+            "experiment_engine.experiment_runner.baseline_models._fit_fm_bpr",
+            side_effect=fake_fit,
+        ):
+            result = run_experiment(spec, checkpoint_manager=manager, verbose=False)
+
+        self.assertEqual(result["encoded_fields"][-1], "video_long_view_rate")
+        diagnostics = result["operator_diagnostics"]
+        self.assertEqual(diagnostics["training_global_long_view_rate"], 0.5)
+        self.assertEqual(diagnostics["training_videos"], 2)
+        self.assertTrue(diagnostics["uses_training_split_only"])
+
 
 if __name__ == "__main__":
     unittest.main()

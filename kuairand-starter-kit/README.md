@@ -182,6 +182,7 @@ operators are:
 | `missing_duration_category` | `cleaning` | Separate zero/missing duration from observed duration |
 | `video_popularity_bucket` | `features` | Add a training-only video impression-count bucket |
 | `inverse_duplicate_frequency` | `cleaning` | Inverse-frequency sample label-free exact training-feature duplicates |
+| `smoothed_video_long_view_rate` | `features` | Bucket leave-one-out training video outcomes with a fixed smoothing prior |
 
 Feature operators add the selected field without modifying protected `data.py`.
 The duplicate operator instead supplies row-aligned training weights and leaves

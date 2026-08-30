@@ -98,6 +98,50 @@ class FeaturePipelineTests(unittest.TestCase):
         with self.assertRaises(FeatureOperatorError):
             validate_pipeline_selection("features", "inverse_duplicate_frequency")
 
+    def test_smoothed_video_rate_uses_training_labels_only(self):
+        train = [
+            (20220408, "u1", "v1", "a1", "home", 1000.0, 1),
+            (20220408, "u2", "v1", "a1", "home", 1000.0, 1),
+            (20220408, "u3", "v2", "a2", "other", 2000.0, 0),
+            (20220408, "u4", "v2", "a2", "other", 2000.0, 0),
+        ]
+        splits = {"train": train, "valid": self.valid, "test": []}
+        encoded, dimension = encode_candidate_splits(
+            splits, operator_name="smoothed_video_long_view_rate"
+        )
+        changed = dict(splits)
+        changed["valid"] = [row[:6] + (1 - row[6],) for row in self.valid]
+        changed_encoded, changed_dimension = encode_candidate_splits(
+            changed, operator_name="smoothed_video_long_view_rate"
+        )
+
+        self.assertEqual(encoded["train"][0].shape[1], 6)
+        self.assertEqual(encoded["valid"][0].shape[1], 6)
+        self.assertNotEqual(
+            encoded["train"][0][1, -1],
+            encoded["valid"][0][0, -1],
+        )
+        self.assertEqual(dimension, changed_dimension)
+        np.testing.assert_array_equal(
+            encoded["valid"][0], changed_encoded["valid"][0]
+        )
+        self.assertEqual(
+            encoded_field_names("smoothed_video_long_view_rate")[-1],
+            "video_long_view_rate",
+        )
+        diagnostics = operator_diagnostics(
+            splits, operator_name="smoothed_video_long_view_rate"
+        )
+        self.assertEqual(diagnostics["smoothing_prior"], 20.0)
+        self.assertEqual(diagnostics["training_global_long_view_rate"], 0.5)
+        self.assertEqual(diagnostics["training_videos"], 2)
+        self.assertTrue(diagnostics["uses_training_labels"])
+
+    def test_smoothed_video_rate_operator_is_features_only(self):
+        validate_pipeline_selection("features", "smoothed_video_long_view_rate")
+        with self.assertRaises(FeatureOperatorError):
+            validate_pipeline_selection("cleaning", "smoothed_video_long_view_rate")
+
     def test_weighted_sampler_normalizes_pool_probabilities(self):
         rng = mock.Mock()
         rng.choice.return_value = np.asarray([2])
