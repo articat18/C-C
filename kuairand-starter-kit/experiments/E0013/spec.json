@@ -1,0 +1,22 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "experiment_id": "E0013",
+  "hypothesis": "Given the temporal calibration suggested by the drop in positive rate in the validation set, tuning the BCE weight and popularity weight in the BPR ensemble model might help adjust the predictions effectively.",
+  "parameters": {
+    "bce_weight": 0.5,
+    "bpr_weight": 0.5,
+    "embedding_dim": 64,
+    "l2": 1e-05,
+    "learning_rate": 0.001,
+    "negatives_per_positive": 4,
+    "patience": 5,
+    "popularity_weight": 0.1
+  },
+  "schema_version": 1,
+  "seed": 42,
+  "template": "bpr_ensemble"
+}
