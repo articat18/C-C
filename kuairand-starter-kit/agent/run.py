@@ -22,7 +22,10 @@ def main() -> int:
     context = {}
     if args.context:
         context = json.loads(args.context.read_text(encoding="utf-8"))
-    proposal = GeminiProposalClient().propose(context)
+    try:
+        proposal = GeminiProposalClient().propose(context)
+    except (ValueError, RuntimeError) as exc:
+        parser.error(f"Gemini did not return an approved proposal: {exc}")
     payload = {
         "template": proposal.template,
         "hypothesis": proposal.hypothesis,
