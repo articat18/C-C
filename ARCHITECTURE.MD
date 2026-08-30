@@ -242,6 +242,8 @@ The test split is evaluated only for the final selected model after human approv
 
 ### Phase 4: Governed full-stack autonomy
 
+**Status: Complete.**
+
 Phase 4 expands the agent from scalar tuning within two BPR templates into a
 single-agent research loop that can choose meaningful changes across cleaning,
 features, loss, model, and training strategy. The expansion remains governed:
@@ -331,6 +333,12 @@ Phase 4 is complete when the agent can, without routine human intervention:
 9. Produce a complete audit summary including diffs, resources, recoveries, and
    the number of manual interventions.
 
+These criteria were exercised by the E0023 failure/E0024 recovery pair, the
+proposal-only and sandbox-patch validation paths, and the zero-intervention
+E0026 autonomous run, which reflected on subgroup outcomes and stopped at the
+configured convergence boundary. `agent.audit` derives the complete summary
+from the append-only registry and decision evidence.
+
 ### Phase 5: Advanced ranking
 
 - Add LambdaRank only if diagnostics show weak top-five ordering.
@@ -350,6 +358,6 @@ The orchestrator remains the only owner of experiment state, budgets, convergenc
 
 ## Immediate Milestone
 
-Phases 0, 1, 2, 3, 4A, and 4B are complete. The immediate milestone is Phase
-4C: add sandboxed candidate-code proposals with atomic rejection, then complete
-the Phase 4D recovery and audit summary.
+Phases 0 through 4 are complete. The immediate milestone is Phase 5: evaluate
+advanced ranking objectives only where the Phase 4 validation and subgroup
+evidence justifies their added complexity.

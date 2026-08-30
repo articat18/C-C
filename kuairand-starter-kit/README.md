@@ -295,7 +295,7 @@ The project follows the phases in the repository-level `ARCHITECTURE.md`:
 | Phase 1: deterministic experiment spine | Complete |
 | Phase 2: EDA and subgroup diagnostics | Complete |
 | Phase 3: first bounded research cycle | Complete (best candidate 0.60114; baseline 0.6016) |
-| Phase 4: governed full-stack autonomy | In progress (4A complete; cleaning, popularity, and duplicate-weighting operators integrated) |
+| Phase 4: governed full-stack autonomy | Complete (reviewed operators, sandboxed patches, recovery, reflection, and audit evidence) |
 | Phase 5: advanced ranking | Planned |
 | Phase 6: optional multi-agent expansion | Deferred |
 
