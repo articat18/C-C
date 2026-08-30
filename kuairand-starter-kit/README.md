@@ -115,6 +115,11 @@ python3 -m experiment_engine.orchestrator --max-runs 3 --quiet
 Add `--auto-continue` only when you explicitly want the orchestrator to open a
 new, documented convergence window after the current one stops.
 
+The Gemini integration is proposal-only: `agent.proposal` validates the model's
+JSON against the approved templates and parameter bounds before the orchestrator
+can create or run anything. A live model request is optional and may incur Vertex
+AI charges; configuration-only health checks never call the model.
+
 Run the strongest candidates again with `--seed 1` and `--seed 2` using the
 controller after the initial search. All selection remains validation-only; test
 evaluation still requires a separate human approval receipt.

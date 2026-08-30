@@ -47,61 +47,73 @@ class ExperimentController:
         if result_path.exists() or failure_path.exists():
             raise ControllerError(f"experiment has already been executed: {run_directory}")
         run_directory.mkdir(parents=True, exist_ok=True)
-        spec_path = run_directory / "spec.json"
-        if spec_path.exists():
-            canonical_spec = ExperimentSpec.load(spec_path)
-            if canonical_spec.fingerprint() != spec.fingerprint():
-                raise ControllerError(
-                    f"submitted specification differs from canonical package: {spec_path}"
-                )
-        else:
-            _atomic_json_write(spec_path, spec.to_dict())
-
-        started_at = _utc_now()
-        started = time.monotonic()
+        lock_path = run_directory / ".run.lock"
         try:
-            with _wall_time_limit(spec.budget.max_wall_seconds):
-                result = run_experiment(spec, verbose=verbose)
-            comparison = self._compare_with_history(result)
-            result["comparison"] = comparison
-            _atomic_json_write(result_path, result)
-            record = {
-                "experiment_id": spec.experiment_id,
-                "status": "success",
-                "template": spec.template,
-                "spec_fingerprint": spec.fingerprint(),
-                "hypothesis": spec.hypothesis,
-                "started_at": started_at,
-                "completed_at": result["completed_at"],
-                "duration_seconds": result["duration_seconds"],
-                "metrics": result["metrics"],
-                "diagnostics": result.get("diagnostics", {}),
-                "comparison": comparison,
-                "result_path": result_path.relative_to(
-                    resolve_editable_path("experiments").parent
-                ).as_posix(),
-            }
-            self.registry.append(record)
-            return result
-        except Exception as exc:
-            failure = {
-                "experiment_id": spec.experiment_id,
-                "status": "failed",
-                "template": spec.template,
-                "spec_fingerprint": spec.fingerprint(),
-                "hypothesis": spec.hypothesis,
-                "started_at": started_at,
-                "completed_at": _utc_now(),
-                "duration_seconds": round(time.monotonic() - started, 6),
-                "error_type": type(exc).__name__,
-                "error": str(exc),
-            }
-            _atomic_json_write(failure_path, failure)
+            descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(descriptor)
+        except FileExistsError as exc:
+            raise ControllerError(f"experiment is already running: {spec.experiment_id}") from exc
+        spec_path = run_directory / "spec.json"
+        try:
+            if spec_path.exists():
+                    canonical_spec = ExperimentSpec.load(spec_path)
+                    if canonical_spec.fingerprint() != spec.fingerprint():
+                        raise ControllerError(
+                            f"submitted specification differs from canonical package: {spec_path}"
+                        )
+            else:
+                _atomic_json_write(spec_path, spec.to_dict())
+
+            started_at = _utc_now()
+            started = time.monotonic()
             try:
-                self.registry.append(failure)
-            except RegistryError:
+                    with _wall_time_limit(spec.budget.max_wall_seconds):
+                        result = run_experiment(spec, verbose=verbose)
+                    comparison = self._compare_with_history(result)
+                    result["comparison"] = comparison
+                    _atomic_json_write(result_path, result)
+                    record = {
+                        "experiment_id": spec.experiment_id,
+                        "status": "success",
+                        "template": spec.template,
+                        "spec_fingerprint": spec.fingerprint(),
+                        "hypothesis": spec.hypothesis,
+                        "started_at": started_at,
+                        "completed_at": result["completed_at"],
+                        "duration_seconds": result["duration_seconds"],
+                        "metrics": result["metrics"],
+                        "diagnostics": result.get("diagnostics", {}),
+                        "comparison": comparison,
+                        "result_path": result_path.relative_to(
+                            resolve_editable_path("experiments").parent
+                        ).as_posix(),
+                    }
+                    self.registry.append(record)
+                    return result
+            except Exception as exc:
+                failure = {
+                        "experiment_id": spec.experiment_id,
+                        "status": "failed",
+                        "template": spec.template,
+                        "spec_fingerprint": spec.fingerprint(),
+                        "hypothesis": spec.hypothesis,
+                        "started_at": started_at,
+                        "completed_at": _utc_now(),
+                        "duration_seconds": round(time.monotonic() - started, 6),
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    }
+                _atomic_json_write(failure_path, failure)
+                try:
+                    self.registry.append(failure)
+                except RegistryError:
+                    pass
+                raise
+        finally:
+            try:
+                lock_path.unlink()
+            except FileNotFoundError:
                 pass
-            raise
 
     def create(
         self,

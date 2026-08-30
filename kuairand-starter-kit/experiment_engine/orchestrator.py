@@ -12,6 +12,7 @@ from typing import Any
 
 from experiment_engine.controller import ControllerError, ExperimentController
 from experiment_engine.phase3 import plan_phase3, run_phase3
+from agent.proposal import ExperimentProposal
 
 
 class Phase3Orchestrator:
@@ -60,6 +61,17 @@ class Phase3Orchestrator:
             "continuations": continuations,
             "status": self.controller.status(),
         }
+
+    def run_proposal(self, proposal: ExperimentProposal, *, verbose: bool = True) -> dict[str, Any]:
+        """Materialize one validated proposal and execute it through the controller."""
+        spec, path = self.controller.create(
+            proposal.template,
+            proposal.hypothesis,
+            seed=proposal.seed,
+            parameters=proposal.parameters,
+        )
+        result = self.controller.run(spec, verbose=verbose)
+        return {"spec_path": str(path), "result": result}
 
 
 def main() -> int:
