@@ -121,17 +121,29 @@ JSON against the approved templates and parameter bounds before the orchestrator
 can create or run anything. A live model request is optional and may incur Vertex
 AI charges; configuration-only health checks never call the model.
 
-To ask Gemini for a proposal without training anything:
+To ask Gemini for a proposal without training anything, save the validated
+proposal as an immutable review artifact:
 
 ```bash
-python3 -m agent.run --context analysis/dataset-profile.json
+python3 -m agent.context --output runs/agent-context.json
+python3 -m agent.run \
+  --context runs/agent-context.json \
+  --output-proposal runs/proposals/phase4-next.json
 ```
 
-After reviewing the validated proposal, explicitly execute it with:
+After reviewing the artifact, explicitly execute that exact saved proposal:
 
 ```bash
-python3 -m agent.run --context analysis/dataset-profile.json --execute
+python3 -m agent.run \
+  --proposal runs/proposals/phase4-next.json \
+  --execute
 ```
+
+The execution path does not call Gemini again. It revalidates the artifact,
+checks its SHA-256 proposal fingerprint, and binds that fingerprint, the context
+fingerprint, available Gemini token usage, source model, and one manual review
+intervention into the immutable experiment specification. Modified proposals
+are rejected instead of silently executing a different experiment.
 
 For a bounded multi-step governed research run, use the agent loop. Omit
 `--execute` to collect proposals only:

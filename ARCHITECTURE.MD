@@ -296,6 +296,10 @@ stay deterministic and outside the agent.
 
 #### 4D: Autonomous reflection, recovery, and evidence
 
+- **Complete:** persist validated Gemini proposals as fingerprinted review
+  artifacts and execute the exact saved proposal without a second model call.
+  Bind proposal/context fingerprints, available token usage, source model, and
+  the manual review intervention into the experiment specification and registry.
 - Let the agent inspect each result, decide `keep`, `reject`, `refine`, or
   `change_direction`, and continue until the convergence or budget rule stops
   the research window.

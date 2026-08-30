@@ -78,6 +78,27 @@ class ExperimentSpecTests(unittest.TestCase):
         with self.assertRaises(SpecificationError):
             ExperimentSpec.from_mapping(value)
 
+    def test_schema_two_records_validated_proposal_provenance(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "stage": "features",
+            "operator": "video_popularity_bucket",
+            "evidence": "Popularity subgroups differ.",
+            "expected_effect": "Improve cold-item ordering.",
+            "parameters": {},
+            "provenance": {
+                "proposal_fingerprint": "a" * 64,
+                "context_fingerprint": "b" * 64,
+                "source_model": "gemini-test",
+                "token_usage": {"input_tokens": 10, "output_tokens": 5},
+                "manual_interventions": 1,
+            },
+        })
+        spec = ExperimentSpec.from_mapping(value)
+        self.assertEqual(spec.provenance["manual_interventions"], 1)
+        self.assertEqual(spec.to_dict()["provenance"]["token_usage"]["input_tokens"], 10)
+
     def test_rejects_arbitrary_code_fields(self):
         value = valid_spec()
         value["command"] = "python arbitrary.py"

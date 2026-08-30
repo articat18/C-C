@@ -141,6 +141,7 @@ def run_experiment(
         "stage": spec.stage,
         "operator": spec.operator,
         "encoded_fields": list(encoded_field_names(spec.operator)),
+        "provenance": dict(spec.provenance or {}),
         "status": "success",
         "selection_split": "valid",
         "metrics": {"valid": valid_metrics},

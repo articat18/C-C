@@ -83,6 +83,7 @@ class ExperimentController:
                         "template": spec.template,
                         "stage": spec.stage,
                         "operator": spec.operator,
+                        "provenance": dict(spec.provenance or {}),
                         "spec_fingerprint": spec.fingerprint(),
                         "hypothesis": spec.hypothesis,
                         "started_at": started_at,
@@ -104,6 +105,7 @@ class ExperimentController:
                         "template": spec.template,
                         "stage": spec.stage,
                         "operator": spec.operator,
+                        "provenance": dict(spec.provenance or {}),
                         "spec_fingerprint": spec.fingerprint(),
                         "hypothesis": spec.hypothesis,
                         "started_at": started_at,
@@ -135,6 +137,7 @@ class ExperimentController:
         operator: str = "none",
         evidence: str | None = None,
         expected_effect: str | None = None,
+        provenance: Mapping[str, Any] | None = None,
     ) -> tuple[ExperimentSpec, Path]:
         """Reserve an ID and write a validated template specification."""
 
@@ -176,6 +179,7 @@ class ExperimentController:
                     "operator": operator,
                     "evidence": evidence or hypothesis,
                     "expected_effect": expected_effect or hypothesis,
+                    **({"provenance": dict(provenance)} if provenance else {}),
                 }
             )
             run_directory = experiments_root / experiment_id

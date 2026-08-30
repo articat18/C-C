@@ -106,6 +106,7 @@ def finalize_experiment(
         "status": "finalized",
         "stage": spec.stage,
         "operator": spec.operator,
+        "provenance": dict(spec.provenance or {}),
         "approval": {
             "approved_by": approval["approved_by"],
             "approved_at": approval["approved_at"],

@@ -32,6 +32,7 @@ V2_TOP_LEVEL_FIELDS = V1_TOP_LEVEL_FIELDS | {
     "operator",
     "evidence",
     "expected_effect",
+    "provenance",
 }
 MAX_EPOCHS = 40
 
@@ -95,6 +96,7 @@ class ExperimentSpec:
     operator: str = "none"
     evidence: str = ""
     expected_effect: str = ""
+    provenance: Mapping[str, Any] | None = None
 
     @classmethod
     def from_mapping(cls, value: Any) -> "ExperimentSpec":
@@ -178,6 +180,7 @@ class ExperimentSpec:
             evidence = evidence.strip()
             expected_effect = expected_effect.strip()
             _validate_one_change(template_name, parameters, stage, operator)
+        provenance = _validate_provenance(value.get("provenance"))
         data_dir = value.get("data_dir", "./KuaiRand-Pure/data")
         if not isinstance(data_dir, str) or not data_dir.strip():
             raise SpecificationError("data_dir must be a non-empty string")
@@ -195,6 +198,7 @@ class ExperimentSpec:
             operator=operator,
             evidence=evidence,
             expected_effect=expected_effect,
+            provenance=provenance,
         )
 
     @classmethod
@@ -227,6 +231,8 @@ class ExperimentSpec:
                 "evidence": self.evidence,
                 "expected_effect": self.expected_effect,
             })
+            if self.provenance is not None:
+                value["provenance"] = dict(self.provenance)
         return value
 
     def fingerprint(self) -> str:
@@ -289,3 +295,68 @@ def _validate_one_change(
             f"parameter {changed[0]!r} belongs to stage "
             f"{PARAMETER_STAGES[changed[0]]!r}, not {stage!r}"
         )
+
+
+def _validate_provenance(value: Any) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise SpecificationError("provenance must be a JSON object")
+    allowed = {
+        "proposal_fingerprint", "context_fingerprint", "source_model",
+        "token_usage", "manual_interventions",
+    }
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise SpecificationError(
+            f"unknown provenance fields: {', '.join(unknown)}"
+        )
+    proposal_hash = value.get("proposal_fingerprint")
+    if not isinstance(proposal_hash, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", proposal_hash
+    ):
+        raise SpecificationError("provenance.proposal_fingerprint must be SHA-256")
+    context_hash = value.get("context_fingerprint")
+    if context_hash is not None and (
+        not isinstance(context_hash, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", context_hash)
+    ):
+        raise SpecificationError(
+            "provenance.context_fingerprint must be SHA-256 or null"
+        )
+    source_model = value.get("source_model")
+    if source_model is not None and (
+        not isinstance(source_model, str) or not source_model.strip()
+    ):
+        raise SpecificationError("provenance.source_model must be a string or null")
+    usage = value.get("token_usage", {})
+    if not isinstance(usage, Mapping):
+        raise SpecificationError("provenance.token_usage must be an object")
+    normalized_usage: dict[str, int] = {}
+    for name, amount in usage.items():
+        if (
+            not isinstance(name, str)
+            or isinstance(amount, bool)
+            or not isinstance(amount, int)
+            or amount < 0
+        ):
+            raise SpecificationError(
+                "provenance.token_usage values must be non-negative integers"
+            )
+        normalized_usage[name] = amount
+    interventions = value.get("manual_interventions", 0)
+    if (
+        isinstance(interventions, bool)
+        or not isinstance(interventions, int)
+        or interventions < 0
+    ):
+        raise SpecificationError(
+            "provenance.manual_interventions must be a non-negative integer"
+        )
+    return {
+        "proposal_fingerprint": proposal_hash,
+        "context_fingerprint": context_hash,
+        "source_model": source_model,
+        "token_usage": normalized_usage,
+        "manual_interventions": interventions,
+    }

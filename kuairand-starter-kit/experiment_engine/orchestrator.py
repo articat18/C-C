@@ -12,7 +12,7 @@ from typing import Any
 
 from experiment_engine.controller import ControllerError, ExperimentController
 from experiment_engine.phase3 import plan_phase3, run_phase3
-from agent.proposal import ExperimentProposal
+from agent.proposal import ExperimentProposal, proposal_fingerprint
 
 
 class ResearchOrchestrator:
@@ -62,8 +62,17 @@ class ResearchOrchestrator:
             "status": self.controller.status(),
         }
 
-    def run_proposal(self, proposal: ExperimentProposal, *, verbose: bool = True) -> dict[str, Any]:
+    def run_proposal(
+        self,
+        proposal: ExperimentProposal,
+        *,
+        verbose: bool = True,
+        manual_interventions: int = 0,
+    ) -> dict[str, Any]:
         """Materialize one validated proposal and execute it through the controller."""
+        provenance = dict(proposal.provenance)
+        provenance["proposal_fingerprint"] = proposal_fingerprint(proposal)
+        provenance["manual_interventions"] = manual_interventions
         spec, path = self.controller.create(
             proposal.template,
             proposal.hypothesis,
@@ -73,6 +82,7 @@ class ResearchOrchestrator:
             operator=proposal.operator,
             evidence=proposal.evidence,
             expected_effect=proposal.expected_effect,
+            provenance=provenance,
         )
         result = self.controller.run(spec, verbose=verbose)
         return {"spec_path": str(path), "result": result}
