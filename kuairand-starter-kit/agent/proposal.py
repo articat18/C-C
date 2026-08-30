@@ -63,15 +63,27 @@ class GeminiProposalClient:
         client = genai.Client(
             vertexai=True, project=self.config.project, location=self.config.location
         )
+        allowed = {
+            name: sorted(get_template(name).parameters)
+            for name in ("bpr_hybrid", "bpr_ensemble")
+        }
         prompt = {
-            "task": "Propose one bounded experiment for the deterministic AutoML engine.",
-            "allowed_templates": ["bpr_hybrid", "bpr_ensemble"],
+            "task": "Propose one bounded Phase 3 experiment for the deterministic AutoML engine.",
+            "allowed_templates": allowed,
+            "strict_rule": "parameters must contain only names listed for the selected template; do not propose feature engineering or cleaning fields",
             "required_output": {"template": "string", "hypothesis": "string", "parameters": "object", "seed": "integer"},
             "context": dict(context),
         }
-        response = client.models.generate_content(
-            model=self.config.model,
-            contents=json.dumps(prompt, sort_keys=True),
-            config=types.GenerateContentConfig(response_mime_type="application/json"),
-        )
-        return parse_proposal(response.text or "")
+        for attempt in range(2):
+            response = client.models.generate_content(
+                model=self.config.model,
+                contents=json.dumps(prompt, sort_keys=True),
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+            try:
+                return parse_proposal(response.text or "")
+            except ValueError as exc:
+                if attempt == 1:
+                    raise
+                prompt["correction"] = f"Previous proposal was invalid: {exc}. Return JSON using only the enumerated parameter names."
+        raise RuntimeError("Gemini did not return a valid proposal")
