@@ -123,9 +123,15 @@ def _group_users(users, ytr):
 
 def _fit_fm_bpr(splits, k=16, lr=0.001, epochs=40, patience=4, seed=0, verbose=True,
                 neg_per_pos=4, bpr_weight=1.0, bce_weight=0.1, l2=1e-5,
-                encode_fn=encode):
+                encode_fn=encode, train_sample_weights=None):
     enc, dim = encode_fn(splits)
     Xtr, ytr, utr = enc['train']; Xva, yva, uva = enc['valid']; Xte, yte, ute = enc['test']
+    if train_sample_weights is not None:
+        train_sample_weights = np.asarray(train_sample_weights, dtype=np.float64)
+        if train_sample_weights.shape != (len(ytr),):
+            raise ValueError('train_sample_weights must align one-to-one with training rows')
+        if not np.all(np.isfinite(train_sample_weights)) or np.any(train_sample_weights <= 0):
+            raise ValueError('train_sample_weights must contain finite positive values')
     m = FM(dim, k=k, lr=lr, l2=l2, seed=seed)
     rng = np.random.default_rng(seed)
     u2pos, u2neg, valid_u = _group_users(utr, ytr)
@@ -146,12 +152,16 @@ def _fit_fm_bpr(splits, k=16, lr=0.001, epochs=40, patience=4, seed=0, verbose=T
                 np_ = min(len(pl), neg_per_pos)
                 if np_ == 0 or len(nl) == 0:
                     continue
-                ps = rng.choice(pl, size=np_, replace=(np_ > len(pl)))
-                ns = rng.choice(nl, size=np_, replace=(np_ > len(nl)))
+                ps = _sample_pool(rng, pl, np_, train_sample_weights)
+                ns = _sample_pool(rng, nl, np_, train_sample_weights)
                 step_p.extend(ps); step_n.extend(ns)
                 nb = min(4, len(pl) + len(nl))
-                step_bce_p.extend(rng.choice(pl, size=min(nb, len(pl)), replace=(nb > len(pl))))
-                step_bce_n.extend(rng.choice(nl, size=min(nb, len(nl)), replace=(nb > len(nl))))
+                step_bce_p.extend(_sample_pool(
+                    rng, pl, min(nb, len(pl)), train_sample_weights
+                ))
+                step_bce_n.extend(_sample_pool(
+                    rng, nl, min(nb, len(nl)), train_sample_weights
+                ))
                 if len(step_p) >= pairs_per_step:
                     break
             if len(step_p) == 0:
@@ -180,6 +190,18 @@ def _fit_fm_bpr(splits, k=16, lr=0.001, epochs=40, patience=4, seed=0, verbose=T
                 break
     m.V, m.W, m.b = best_state
     return m, enc
+
+
+def _sample_pool(rng, pool, size, sample_weights=None):
+    """Sample row indices, optionally correcting repeated-row frequency."""
+
+    if size == 0:
+        return np.asarray([], dtype=np.int64)
+    probabilities = None
+    if sample_weights is not None:
+        probabilities = sample_weights[np.asarray(pool, dtype=np.int64)]
+        probabilities = probabilities / probabilities.sum()
+    return rng.choice(pool, size=size, replace=False, p=probabilities)
 
 def run_fm_bpr(splits, k=16, lr=0.001, epochs=40, patience=4, seed=0, verbose=True,
                neg_per_pos=4, bpr_weight=1.0, bce_weight=0.1, l2=1e-5):

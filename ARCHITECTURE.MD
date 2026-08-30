@@ -263,11 +263,13 @@ stay deterministic and outside the agent.
 
 #### 4B: Reviewed operator catalogue
 
-- **In progress:** the candidate-owned encoder and the first reviewed
-  `missing_duration_category` and `video_popularity_bucket` operators are
-  integrated through training, checkpoints, and finalization. Add the remaining
-  approved experiment families for duplicate
-  handling and weighting, item popularity and smoothed engagement rates,
+- **In progress:** the candidate-owned encoder and the reviewed
+  `missing_duration_category`, `video_popularity_bucket`, and
+  `inverse_duplicate_frequency` operators are integrated through training,
+  checkpoints, and finalization. Duplicate weighting preserves row alignment
+  while sampling label-free exact training-feature tuples in inverse proportion
+  to their frequency. Add the remaining approved experiment families for item
+  popularity and smoothed engagement rates,
   user-author/tag/duration/music affinities, repeat exposure and recency, time
   and distribution-shift features, and loss or sampling strategy.
 - Connect the remaining operators in `candidates/history_features.py` to experiment specifications and the
@@ -344,8 +346,8 @@ The orchestrator remains the only owner of experiment state, budgets, convergenc
 
 ## Immediate Milestone
 
-Phases 0, 1, 2, 3, and 4A are complete. Phase 4B is in progress: run the first
-reviewed cleaning and popularity operators, then add duplicate handling,
+Phases 0, 1, 2, 3, and 4A are complete. Phase 4B is in progress: the first
+cleaning, popularity, and duplicate-weighting operators are integrated; add
 affinity, exposure, recency, and time operators one family at a time. Sandboxed
 candidate-code generation follows only after that operator loop passes its
 safety and recovery checks.

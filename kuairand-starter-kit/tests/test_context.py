@@ -11,6 +11,10 @@ class AgentContextTests(unittest.TestCase):
         self.assertFalse(context["constraints"]["test_accessed"])
         self.assertIn("status", context)
         self.assertIn("video_popularity_bucket", context["constraints"]["approved_operators"])
+        self.assertIn(
+            "inverse_duplicate_frequency",
+            context["constraints"]["approved_operators"],
+        )
         self.assertTrue(context["constraints"]["one_change_per_iteration"])
         for experiment in context["experiments"]:
             self.assertNotIn("test", experiment.get("metrics", {}))

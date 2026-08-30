@@ -181,10 +181,13 @@ operators are:
 |---|---|---|
 | `missing_duration_category` | `cleaning` | Separate zero/missing duration from observed duration |
 | `video_popularity_bucket` | `features` | Add a training-only video impression-count bucket |
+| `inverse_duplicate_frequency` | `cleaning` | Inverse-frequency sample label-free exact training-feature duplicates |
 
-The candidate encoder adds the selected field without modifying protected
-`data.py`. Operator state and vocabularies are fitted on training only; the same
-recorded operator is reconstructed during human-approved finalization.
+Feature operators add the selected field without modifying protected `data.py`.
+The duplicate operator instead supplies row-aligned training weights and leaves
+the encoded train, validation, and test rows intact. Operator state and
+vocabularies are fitted on training only; the same recorded operator is
+reconstructed during human-approved finalization.
 
 After reviewing Phase 3 convergence, explicitly open a new research window and
 reserve one operator experiment:
@@ -243,7 +246,7 @@ The project follows the phases in the repository-level `ARCHITECTURE.md`:
 | Phase 1: deterministic experiment spine | Complete |
 | Phase 2: EDA and subgroup diagnostics | Complete |
 | Phase 3: first bounded research cycle | Complete (best candidate 0.60114; baseline 0.6016) |
-| Phase 4: governed full-stack autonomy | In progress (4A complete; first 4B operators integrated) |
+| Phase 4: governed full-stack autonomy | In progress (4A complete; cleaning, popularity, and duplicate-weighting operators integrated) |
 | Phase 5: advanced ranking | Planned |
 | Phase 6: optional multi-agent expansion | Deferred |
 

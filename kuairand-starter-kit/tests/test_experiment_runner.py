@@ -84,6 +84,65 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertIn("validation_subgroups", result["diagnostics"])
         self.assertTrue(result["diagnostics"]["validation_subgroups"])
 
+    def test_runner_applies_train_only_duplicate_weights_without_dropping_rows(self):
+        spec = ExperimentSpec.from_mapping(
+            {
+                "schema_version": 2,
+                "experiment_id": "E0098",
+                "template": "bpr_hybrid",
+                "stage": "cleaning",
+                "operator": "inverse_duplicate_frequency",
+                "hypothesis": "Repeated interactions should contribute once in expectation.",
+                "evidence": "The training split contains exact feature duplicates.",
+                "expected_effect": "Reduce duplicate-driven sampling bias.",
+                "parameters": {},
+                "budget": {"max_epochs": 1, "max_wall_seconds": 60},
+            }
+        )
+        model = SimpleNamespace(
+            V=np.ones((4, 2), dtype=np.float32),
+            W=np.zeros(4, dtype=np.float32),
+            b=np.float32(0),
+            predict=lambda features: np.asarray([0.9, 0.1], dtype=np.float32),
+        )
+        loaded = {
+            "train": [
+                (20220408, "u", "v1", "a", "t", 1.0, 1),
+                (20220408, "u", "v1", "a", "t", 1.0, 1),
+                (20220408, "u", "v2", "a", "t", 1.0, 0),
+            ],
+            "valid": [
+                (20220422, "u", "v1", "a", "t", 1.0, 1),
+                (20220422, "u", "v2", "a", "t", 1.0, 0),
+            ],
+        }
+
+        def fake_fit(splits, **kwargs):
+            encoded, _ = kwargs["encode_fn"](splits)
+            np.testing.assert_array_equal(
+                kwargs["train_sample_weights"], np.asarray([0.5, 0.5, 1.0])
+            )
+            self.assertEqual(len(encoded["train"][0]), 3)
+            self.assertEqual(len(encoded["valid"][0]), 2)
+            return model, encoded
+
+        manager = CheckpointManager(Path(self.temporary.name) / "experiments")
+        with mock.patch(
+            "experiment_engine.experiment_runner.load", return_value=loaded
+        ), mock.patch(
+            "experiment_engine.experiment_runner.baseline_models._fit_fm_bpr",
+            side_effect=fake_fit,
+        ):
+            result = run_experiment(spec, checkpoint_manager=manager, verbose=False)
+
+        self.assertEqual(result["rows"]["train"], 3)
+        self.assertEqual(result["encoded_fields"], [
+            "user_id", "video_id", "author_id", "tab", "dur_bucket",
+        ])
+        diagnostics = result["operator_diagnostics"]
+        self.assertEqual(diagnostics["duplicate_groups"], 1)
+        self.assertEqual(diagnostics["effective_training_mass"], 2.0)
+
 
 if __name__ == "__main__":
     unittest.main()

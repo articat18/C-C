@@ -1,11 +1,15 @@
 import unittest
+from unittest import mock
 
 import numpy as np
 
+import baseline
 from candidates.feature_pipeline import (
     FeatureOperatorError,
     encode_candidate_splits,
     encoded_field_names,
+    operator_diagnostics,
+    training_sample_weights,
     validate_pipeline_selection,
 )
 from data import encode
@@ -55,6 +59,59 @@ class FeaturePipelineTests(unittest.TestCase):
         validate_pipeline_selection("features", "video_popularity_bucket")
         with self.assertRaises(FeatureOperatorError):
             validate_pipeline_selection("cleaning", "video_popularity_bucket")
+
+    def test_inverse_duplicate_weights_preserve_alignment_and_ignore_labels(self):
+        duplicate_train = [
+            (20220408, "u1", "v1", "a1", "home", 1000.0, 1),
+            (20220408, "u1", "v1", "a1", "home", 1000.0, 0),
+            (20220408, "u1", "v2", "a1", "home", 1000.0, 0),
+        ]
+        splits = {"train": duplicate_train, "valid": self.valid, "test": []}
+        weights = training_sample_weights(
+            splits, operator_name="inverse_duplicate_frequency"
+        )
+        changed = dict(splits)
+        changed["train"] = [row[:6] + (1 - row[6],) for row in duplicate_train]
+        changed["valid"] = [row[:6] + (1 - row[6],) for row in self.valid]
+        changed_weights = training_sample_weights(
+            changed, operator_name="inverse_duplicate_frequency"
+        )
+        encoded, _ = encode_candidate_splits(
+            splits, operator_name="inverse_duplicate_frequency"
+        )
+
+        np.testing.assert_array_equal(weights, np.asarray([0.5, 0.5, 1.0]))
+        np.testing.assert_array_equal(weights, changed_weights)
+        self.assertEqual(len(encoded["train"][0]), len(duplicate_train))
+        self.assertEqual(len(encoded["valid"][0]), len(self.valid))
+        self.assertEqual(encoded["train"][0].shape[1], 5)
+        diagnostics = operator_diagnostics(
+            splits, operator_name="inverse_duplicate_frequency"
+        )
+        self.assertEqual(diagnostics["duplicate_groups"], 1)
+        self.assertEqual(diagnostics["excess_duplicate_rows"], 1)
+        self.assertEqual(diagnostics["effective_training_mass"], 2.0)
+        self.assertTrue(diagnostics["preserves_row_count"])
+
+    def test_inverse_duplicate_operator_is_cleaning_only(self):
+        validate_pipeline_selection("cleaning", "inverse_duplicate_frequency")
+        with self.assertRaises(FeatureOperatorError):
+            validate_pipeline_selection("features", "inverse_duplicate_frequency")
+
+    def test_weighted_sampler_normalizes_pool_probabilities(self):
+        rng = mock.Mock()
+        rng.choice.return_value = np.asarray([2])
+        chosen = baseline._sample_pool(
+            rng,
+            [0, 1, 2],
+            1,
+            np.asarray([0.5, 0.5, 1.0]),
+        )
+
+        np.testing.assert_array_equal(chosen, np.asarray([2]))
+        _, kwargs = rng.choice.call_args
+        np.testing.assert_allclose(kwargs["p"], np.asarray([0.25, 0.25, 0.5]))
+        self.assertFalse(kwargs["replace"])
 
 
 if __name__ == "__main__":

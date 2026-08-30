@@ -39,6 +39,20 @@ class ExperimentSpecTests(unittest.TestCase):
         self.assertEqual(spec.operator, "video_popularity_bucket")
         self.assertEqual(spec.to_dict()["schema_version"], 2)
 
+    def test_schema_two_accepts_inverse_duplicate_frequency_operator(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "stage": "cleaning",
+            "operator": "inverse_duplicate_frequency",
+            "evidence": "Training contains repeated interactions.",
+            "expected_effect": "Reduce repeated-row sampling bias.",
+            "parameters": {},
+        })
+        spec = ExperimentSpec.from_mapping(value)
+        self.assertEqual(spec.stage, "cleaning")
+        self.assertEqual(spec.operator, "inverse_duplicate_frequency")
+
     def test_schema_two_rejects_operator_plus_scalar_change(self):
         value = valid_spec()
         value.update({

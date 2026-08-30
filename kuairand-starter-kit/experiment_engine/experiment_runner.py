@@ -11,7 +11,12 @@ from typing import Any
 import numpy as np
 
 import baseline as baseline_models
-from candidates.feature_pipeline import encode_candidate_splits, encoded_field_names
+from candidates.feature_pipeline import (
+    encode_candidate_splits,
+    encoded_field_names,
+    operator_diagnostics,
+    training_sample_weights,
+)
 from data import load
 from evaluate import evaluate
 from experiment_engine.checkpoints import CheckpointManager
@@ -70,6 +75,7 @@ def run_experiment(
     encode_fn = lambda candidate_splits: encode_candidate_splits(
         candidate_splits, operator_name=spec.operator
     )
+    sample_weights = training_sample_weights(splits, operator_name=spec.operator)
     member_predictions: list[np.ndarray] = []
     checkpoints = []
     member_metrics = []
@@ -97,6 +103,7 @@ def run_experiment(
             bce_weight=float(parameters["bce_weight"]),
             l2=float(parameters["l2"]),
             encode_fn=encode_fn,
+            train_sample_weights=sample_weights,
         )
         X_valid, valid_labels, valid_users = encoded["valid"]
         predictions = model.predict(X_valid)
@@ -141,6 +148,9 @@ def run_experiment(
         "stage": spec.stage,
         "operator": spec.operator,
         "encoded_fields": list(encoded_field_names(spec.operator)),
+        "operator_diagnostics": operator_diagnostics(
+            splits, operator_name=spec.operator
+        ),
         "provenance": dict(spec.provenance or {}),
         "status": "success",
         "selection_split": "valid",
