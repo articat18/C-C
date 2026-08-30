@@ -1,0 +1,22 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "experiment_id": "E0012",
+  "hypothesis": "Using a hybrid BPR approach with a non-zero popularity weight and balanced BCE/BPR weights will help calibrate predictions against the observed temporal drift in positive rates.",
+  "parameters": {
+    "bce_weight": 0.5,
+    "bpr_weight": 0.5,
+    "embedding_dim": 64,
+    "l2": 0.0001,
+    "learning_rate": 0.001,
+    "negatives_per_positive": 4,
+    "patience": 5,
+    "popularity_weight": 0.2
+  },
+  "schema_version": 1,
+  "seed": 42,
+  "template": "bpr_hybrid"
+}
