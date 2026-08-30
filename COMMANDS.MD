@@ -306,6 +306,23 @@ Otherwise, the decision is `reject_or_refine`.
 
 The controller reports convergence after three consecutive successful experiments fail to improve the best validation primary by more than `0.002`.
 
+When a search direction has converged below the official baseline, a human may
+open a new research window with an auditable reason. This preserves the prior
+results while allowing a deliberately different approved search direction:
+
+```bash
+python3 -m experiment_engine.controller continue \
+  --reason "BPR weight search converged below baseline; switch to ensemble and learning-rate search"
+```
+
+The command is rejected unless the current window has converged. It does not
+reset the global 50-experiment budget, erase registry records, or authorize final
+test evaluation. Check the new window with:
+
+```bash
+python3 -m experiment_engine.controller status
+```
+
 ## 11. Handling failures
 
 If a run fails, replace `EXPERIMENT_ID` with the returned experiment ID and inspect:

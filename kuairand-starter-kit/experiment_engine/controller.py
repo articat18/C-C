@@ -31,6 +31,9 @@ class ControllerError(RuntimeError):
     """Raised when controller policy prevents an experiment from running."""
 
 
+CONTINUATION_PATH = Path("experiments/research_windows.jsonl")
+
+
 class ExperimentController:
     def __init__(self, registry: ExperimentRegistry | None = None) -> None:
         self.registry = registry or ExperimentRegistry()
@@ -185,6 +188,7 @@ class ExperimentController:
         else:
             best_source = self.baseline.name
             best_primary = self.baseline.primary
+        records_since_resume = self._records_since_resume(all_records)
         return {
             "iterations": len(all_records),
             "successful": len(successes),
@@ -205,11 +209,56 @@ class ExperimentController:
             ),
             "best_valid_primary": best_primary,
             "best_source": best_source,
-            "converged": _has_converged(
-                [self.baseline.primary, *primary_scores]
-            ),
+            "converged": _has_converged([
+                self.baseline.primary,
+                *[float(r["metrics"]["valid"]["primary"])
+                  for r in records_since_resume
+                  if r.get("status") == "success"],
+            ]),
+            "research_window_experiments": len(records_since_resume),
             "remaining_iterations": max(0, MAX_ITERATIONS - len(all_records)),
         }
+
+    def continue_research(self, reason: str) -> dict[str, Any]:
+        """Authorize a fresh convergence window after a human-reviewed reason."""
+        reason = reason.strip()
+        if not reason:
+            raise ControllerError("a continuation reason is required")
+        records = list(self.registry.records())
+        if not _has_converged([
+            self.baseline.primary,
+            *[float(r["metrics"]["valid"]["primary"])
+              for r in self._records_since_resume(records)
+              if r.get("status") == "success"],
+        ]):
+            raise ControllerError("the current research window has not converged")
+        if len(records) >= MAX_ITERATIONS:
+            raise ControllerError(f"maximum of {MAX_ITERATIONS} experiments reached")
+        entry = {
+            "event": "research_continuation",
+            "reason": reason,
+            "experiment_count": len(records),
+            "timestamp": _utc_now(),
+        }
+        path = resolve_editable_path(CONTINUATION_PATH)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(entry, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        return entry
+
+    def _records_since_resume(self, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        path = resolve_editable_path(CONTINUATION_PATH)
+        if not path.exists():
+            return records
+        latest: dict[str, Any] | None = None
+        with path.open(encoding="utf-8") as stream:
+            for line in stream:
+                if line.strip():
+                    latest = json.loads(line)
+        start = int(latest.get("experiment_count", 0)) if latest else 0
+        return records[start:]
 
     def _preflight(self, spec: ExperimentSpec) -> None:
         assert_protected_files_unchanged()
@@ -222,7 +271,7 @@ class ExperimentController:
             )
         scores = [
             float(record["metrics"]["valid"]["primary"])
-            for record in records
+            for record in self._records_since_resume(records)
             if record.get("status") == "success"
         ]
         if _has_converged([self.baseline.primary, *scores]):
@@ -322,6 +371,10 @@ def main() -> int:
     create_parser.add_argument("--template", required=True, choices=sorted(TEMPLATES))
     create_parser.add_argument("--hypothesis", required=True)
     create_parser.add_argument("--seed", type=int, default=0)
+    continue_parser = subparsers.add_parser(
+        "continue", help="open a new research window after convergence"
+    )
+    continue_parser.add_argument("--reason", required=True)
     subparsers.add_parser("status", help="show experiment-loop status")
     args = parser.parse_args()
 
@@ -340,6 +393,8 @@ def main() -> int:
                 "path": path.relative_to(resolve_editable_path("experiments").parent).as_posix(),
                 "spec_fingerprint": spec.fingerprint(),
             }
+        elif args.command == "continue":
+            output = controller.continue_research(args.reason)
         else:
             output = controller.status()
     except (
