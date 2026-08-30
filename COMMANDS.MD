@@ -1,6 +1,9 @@
 # Deterministic Experiment Engine Commands
 
-This guide explains how to run the KuaiRand-Pure deterministic experiment engine manually. These commands run local Python and NumPy code. They do not contact Gemini or incur Vertex AI model charges.
+This guide explains the normal Gemini-assisted workflow for the KuaiRand-Pure
+experiment engine. Gemini proposes bounded experiments; the deterministic
+orchestrator and controller validate, run, and record them. Manual controller
+commands remain available for inspection and recovery.
 
 ## 1. Enter the project
 
@@ -96,7 +99,55 @@ cat analysis/dataset-profile.json
 Every candidate `result.json` also records deterministic validation subgroup
 metrics and GAUC/nDCG/primary deltas against the protected published baseline.
 
-## 5. Create and run a controlled experiment
+## 5. Run the bounded Gemini agent
+
+Verify the local Vertex configuration without an API request:
+
+```bash
+python3 -m agent.vertex_healthcheck
+```
+
+Ask Gemini for a validated proposal without creating or running an experiment:
+
+```bash
+python3 -m agent.run \
+  --context analysis/dataset-profile.json
+```
+
+Run a bounded autonomous Phase 3 loop. Each step proposes one approved
+experiment, executes it through the controller, evaluates only `valid`, and
+appends a decision to `runs/agent-decisions.jsonl`:
+
+```bash
+python3 -m agent.autonomous \
+  --context analysis/dataset-profile.json \
+  --max-steps 3 \
+  --execute
+```
+
+If the current research window converges, the loop stops for human review. To
+explicitly allow it to open a documented continuation window:
+
+```bash
+python3 -m agent.autonomous \
+  --context analysis/dataset-profile.json \
+  --max-steps 3 \
+  --execute \
+  --auto-continue
+```
+
+Inspect the agent's decisions and controller status:
+
+```bash
+cat runs/agent-decisions.jsonl
+python3 -m experiment_engine.controller status
+```
+
+The agent cannot generate arbitrary code or parameters. All proposals must
+match the approved template catalogue, and the controller continues to protect
+the hidden test split.
+
+## 6. Create and run a controlled experiment manually (fallback)
 
 Ask the controller to reserve the next unused experiment ID and create a
 normalized specification from an approved template:
@@ -159,7 +210,7 @@ cat experiments/index.jsonl
 ls -lh experiments/E0003/checkpoints
 ```
 
-## 6. Create another experiment
+## 7. Create another experiment
 
 Run the allocator again with one new hypothesis:
 
@@ -182,7 +233,7 @@ python3 -m experiment_engine.controller run experiments/E0004/spec.json
 
 Each experiment should test one clear change. Each experiment ID can be used only once, including failed runs.
 
-## 7. Run the ensemble template
+## 8. Run the ensemble template
 
 Create an ensemble specification with an automatically allocated ID:
 
@@ -202,7 +253,7 @@ python3 -m experiment_engine.controller run experiments/E0005/spec.json
 
 The ensemble trains three consecutive seeds and therefore takes longer than `bpr_hybrid`.
 
-## 8. Experiment specification reference
+## 9. Experiment specification reference
 
 A specification has this structure:
 
@@ -240,7 +291,7 @@ Initially approved templates:
 
 Specifications cannot contain shell commands, Python source, module paths, or unknown parameters. The engine rejects anything outside the approved schema and template catalog.
 
-## 9. Output locations
+## 10. Output locations
 
 For a generated experiment `EXPERIMENT_ID`, the engine creates:
 
@@ -269,7 +320,7 @@ second standalone specification.
 
 An ensemble produces `member-00`, `member-01`, and `member-02` checkpoints.
 
-## 10. Understanding the result
+## 11. Understanding the result
 
 Important fields in `result.json` include:
 
@@ -323,7 +374,7 @@ test evaluation. Check the new window with:
 python3 -m experiment_engine.controller status
 ```
 
-## 11. Handling failures
+## 12. Handling failures
 
 If a run fails, replace `EXPERIMENT_ID` with the returned experiment ID and inspect:
 
@@ -342,7 +393,7 @@ python3 -m unittest discover -s tests -v
 python3 -m experiment_engine.controller status
 ```
 
-## 12. Human-gated final test and submission
+## 13. Human-gated final test and submission
 
 Candidate runs never evaluate test data. After the team selects a genuine
 finalist, a human must create an approval receipt using the exact confirmation
@@ -374,7 +425,7 @@ runs/FINALIST_ID/submission.csv
 Finalization is one-time: it refuses to overwrite an existing final result or
 submission. Do not approve ordinary tuning runs.
 
-## 13. What does and does not call Gemini
+## 14. What does and does not call Gemini
 
 The following commands do not call Gemini:
 
@@ -390,13 +441,19 @@ python3 -m experiment_engine.finalize FINALIST_ID
 python3 -m unittest discover -s tests -v
 ```
 
-The only currently implemented command that contacts Gemini is the explicit live Vertex AI health check:
+The following commands call Vertex AI and may incur model charges:
 
 ```bash
+python3 -m agent.run --context analysis/dataset-profile.json
+python3 -m agent.autonomous --context analysis/dataset-profile.json --max-steps 3
 python3 -m agent.vertex_healthcheck --live
 ```
 
-That health check does not choose or run experiments. The future Gemini orchestrator will inspect the registry, select an approved template, create a validated specification, invoke the same controller, and interpret the resulting evidence.
+Adding `--execute` to the autonomous command also trains and evaluates the
+proposed experiment locally.
+
+The proposal and autonomous commands contact Gemini through Vertex AI. The
+health check only verifies connectivity; it does not choose or run experiments.
 
 ## Quick-start sequence
 
@@ -409,14 +466,10 @@ python3 -m experiment_engine.controller status
 
 python3 -m experiment_engine.reproduce_baseline
 
-python3 -m experiment_engine.controller create \
-  --template bpr_hybrid \
-  --hypothesis "A BPR weight of 0.5 improves validation ranking."
-# Read the experiment ID and path printed by the command.
-# Edit that returned JSON so bpr_weight actually equals 0.5.
-nano experiments/E0003/spec.json
-python3 -m experiment_engine.controller run experiments/E0003/spec.json
+python3 -m agent.autonomous \
+  --context analysis/dataset-profile.json \
+  --max-steps 3 \
+  --execute
 python3 -m experiment_engine.controller status
-
-cat experiments/E0003/result.json
+cat runs/agent-decisions.jsonl
 ```
