@@ -22,6 +22,61 @@ class ExperimentSpecTests(unittest.TestCase):
         self.assertEqual(spec.parameters["embedding_dim"], 16)
         self.assertEqual(spec.budget.max_epochs, 5)
         self.assertEqual(spec.fingerprint(), spec.fingerprint())
+        self.assertNotIn("stage", spec.to_dict())
+
+    def test_schema_two_accepts_one_reviewed_feature_operator(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "stage": "features",
+            "operator": "video_popularity_bucket",
+            "evidence": "Rare and popular items have different subgroup performance.",
+            "expected_effect": "Training-only popularity improves cold-item ordering.",
+            "parameters": {},
+        })
+        spec = ExperimentSpec.from_mapping(value)
+        self.assertEqual(spec.stage, "features")
+        self.assertEqual(spec.operator, "video_popularity_bucket")
+        self.assertEqual(spec.to_dict()["schema_version"], 2)
+
+    def test_schema_two_rejects_operator_plus_scalar_change(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "stage": "features",
+            "operator": "video_popularity_bucket",
+            "evidence": "Popularity subgroups differ.",
+            "expected_effect": "Improve item ranking.",
+            "parameters": {"bpr_weight": 0.5},
+        })
+        with self.assertRaises(SpecificationError):
+            ExperimentSpec.from_mapping(value)
+
+    def test_schema_two_rejects_mismatched_stage(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "stage": "cleaning",
+            "operator": "video_popularity_bucket",
+            "evidence": "Popularity subgroups differ.",
+            "expected_effect": "Improve item ranking.",
+            "parameters": {},
+        })
+        with self.assertRaises(SpecificationError):
+            ExperimentSpec.from_mapping(value)
+
+    def test_schema_two_rejects_two_scalar_changes(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "stage": "training",
+            "operator": "none",
+            "evidence": "Test one-change enforcement.",
+            "expected_effect": "Only one scalar may differ.",
+            "parameters": {"learning_rate": 0.002, "l2": 0.001},
+        })
+        with self.assertRaises(SpecificationError):
+            ExperimentSpec.from_mapping(value)
 
     def test_rejects_arbitrary_code_fields(self):
         value = valid_spec()

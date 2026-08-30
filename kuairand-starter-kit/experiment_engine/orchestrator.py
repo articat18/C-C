@@ -1,4 +1,4 @@
-"""Deterministic Phase 3 research orchestrator.
+"""Deterministic governed research orchestrator.
 
 This is the policy layer that a future Gemini adapter can call.  It owns no
 training code: all execution remains in ``ExperimentController``.
@@ -15,7 +15,7 @@ from experiment_engine.phase3 import plan_phase3, run_phase3
 from agent.proposal import ExperimentProposal
 
 
-class Phase3Orchestrator:
+class ResearchOrchestrator:
     def __init__(self, controller: ExperimentController | None = None) -> None:
         self.controller = controller or ExperimentController()
 
@@ -69,6 +69,10 @@ class Phase3Orchestrator:
             proposal.hypothesis,
             seed=proposal.seed,
             parameters=proposal.parameters,
+            stage=proposal.stage,
+            operator=proposal.operator,
+            evidence=proposal.evidence,
+            expected_effect=proposal.expected_effect,
         )
         result = self.controller.run(spec, verbose=verbose)
         return {"spec_path": str(path), "result": result}
@@ -81,7 +85,7 @@ def main() -> int:
     parser.add_argument("--auto-continue", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
-    summary = Phase3Orchestrator().run(
+    summary = ResearchOrchestrator().run(
         max_runs=args.max_runs,
         seed=args.seed,
         auto_continue=args.auto_continue,
@@ -93,3 +97,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# Compatibility for existing Phase 3 imports and scripts.
+Phase3Orchestrator = ResearchOrchestrator

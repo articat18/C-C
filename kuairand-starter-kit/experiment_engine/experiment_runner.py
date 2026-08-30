@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 
 import baseline as baseline_models
+from candidates.feature_pipeline import encode_candidate_splits, encoded_field_names
 from data import load
 from evaluate import evaluate
 from experiment_engine.checkpoints import CheckpointManager
@@ -43,8 +44,8 @@ def run_experiment(
 ) -> dict[str, Any]:
     """Run a validated template and return JSON-serializable validation evidence.
 
-    The true test rows are intentionally removed before encoding.  Candidate
-    selection therefore cannot inspect test labels, features, or metrics.
+    The loader requests only train and validation. Candidate selection therefore
+    cannot inspect test labels, features, or metrics.
     """
 
     assert_protected_files_unchanged()
@@ -54,7 +55,9 @@ def run_experiment(
     started = time.monotonic()
     deadline = started + spec.budget.max_wall_seconds
 
-    loaded = load(str(spec.resolved_data_dir()))
+    loaded = load(
+        str(spec.resolved_data_dir()), split_names=("train", "valid")
+    )
     splits = {
         "train": loaded["train"],
         "valid": loaded["valid"],
@@ -64,6 +67,9 @@ def run_experiment(
 
     parameters = dict(spec.parameters)
     popularity_weight = float(parameters.pop("popularity_weight"))
+    encode_fn = lambda candidate_splits: encode_candidate_splits(
+        candidate_splits, operator_name=spec.operator
+    )
     member_predictions: list[np.ndarray] = []
     checkpoints = []
     member_metrics = []
@@ -90,6 +96,7 @@ def run_experiment(
             bpr_weight=float(parameters["bpr_weight"]),
             bce_weight=float(parameters["bce_weight"]),
             l2=float(parameters["l2"]),
+            encode_fn=encode_fn,
         )
         X_valid, valid_labels, valid_users = encoded["valid"]
         predictions = model.predict(X_valid)
@@ -105,6 +112,9 @@ def run_experiment(
                     "experiment_id": spec.experiment_id,
                     "spec_fingerprint": spec.fingerprint(),
                     "template": spec.template,
+                    "stage": spec.stage,
+                    "operator": spec.operator,
+                    "encoded_fields": list(encoded_field_names(spec.operator)),
                     "member": member,
                     "seed": member_seed,
                     "validation_metrics": _metric_subset(metrics),
@@ -128,6 +138,9 @@ def run_experiment(
         "experiment_id": spec.experiment_id,
         "spec_fingerprint": spec.fingerprint(),
         "template": spec.template,
+        "stage": spec.stage,
+        "operator": spec.operator,
+        "encoded_fields": list(encoded_field_names(spec.operator)),
         "status": "success",
         "selection_split": "valid",
         "metrics": {"valid": valid_metrics},

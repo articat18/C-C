@@ -14,7 +14,12 @@ from typing import Any, Iterator, Mapping
 
 from experiment_engine.checkpoints import _atomic_json_write
 from experiment_engine.experiment_runner import ExperimentTimeout, run_experiment
-from experiment_engine.experiment_spec import ExperimentSpec, SpecificationError
+from experiment_engine.experiment_spec import (
+    SCHEMA_VERSION,
+    ExperimentSpec,
+    SpecificationError,
+    infer_pipeline_stage,
+)
 from experiment_engine.experiment_templates import TEMPLATES, TemplateValidationError
 from experiment_engine.reference_baseline import load_baseline_reference
 from experiment_engine.registry import ExperimentRegistry, RegistryError
@@ -76,6 +81,8 @@ class ExperimentController:
                         "experiment_id": spec.experiment_id,
                         "status": "success",
                         "template": spec.template,
+                        "stage": spec.stage,
+                        "operator": spec.operator,
                         "spec_fingerprint": spec.fingerprint(),
                         "hypothesis": spec.hypothesis,
                         "started_at": started_at,
@@ -95,6 +102,8 @@ class ExperimentController:
                         "experiment_id": spec.experiment_id,
                         "status": "failed",
                         "template": spec.template,
+                        "stage": spec.stage,
+                        "operator": spec.operator,
                         "spec_fingerprint": spec.fingerprint(),
                         "hypothesis": spec.hypothesis,
                         "started_at": started_at,
@@ -122,6 +131,10 @@ class ExperimentController:
         *,
         seed: int = 0,
         parameters: Mapping[str, Any] | None = None,
+        stage: str | None = None,
+        operator: str = "none",
+        evidence: str | None = None,
+        expected_effect: str | None = None,
     ) -> tuple[ExperimentSpec, Path]:
         """Reserve an ID and write a validated template specification."""
 
@@ -150,14 +163,19 @@ class ExperimentController:
             experiment_id = f"E{number:04d}"
             if experiment_id in used_ids:
                 continue
+            selected_stage = stage or infer_pipeline_stage(template, parameters)
             spec = ExperimentSpec.from_mapping(
                 {
-                    "schema_version": 1,
+                    "schema_version": SCHEMA_VERSION,
                     "experiment_id": experiment_id,
                     "template": template,
                     "seed": seed,
                     "hypothesis": hypothesis,
                     "parameters": dict(parameters or {}),
+                    "stage": selected_stage,
+                    "operator": operator,
+                    "evidence": evidence or hypothesis,
+                    "expected_effect": expected_effect or hypothesis,
                 }
             )
             run_directory = experiments_root / experiment_id
@@ -383,6 +401,12 @@ def main() -> int:
     create_parser.add_argument("--template", required=True, choices=sorted(TEMPLATES))
     create_parser.add_argument("--hypothesis", required=True)
     create_parser.add_argument("--seed", type=int, default=0)
+    create_parser.add_argument(
+        "--stage", choices=("cleaning", "features", "loss", "model", "training")
+    )
+    create_parser.add_argument("--operator", default="none")
+    create_parser.add_argument("--evidence")
+    create_parser.add_argument("--expected-effect")
     continue_parser = subparsers.add_parser(
         "continue", help="open a new research window after convergence"
     )
@@ -398,7 +422,13 @@ def main() -> int:
             output = controller.run(spec, verbose=not args.quiet)
         elif args.command == "create":
             spec, path = controller.create(
-                args.template, args.hypothesis, seed=args.seed
+                args.template,
+                args.hypothesis,
+                seed=args.seed,
+                stage=args.stage,
+                operator=args.operator,
+                evidence=args.evidence,
+                expected_effect=args.expected_effect,
             )
             output = {
                 "experiment_id": spec.experiment_id,

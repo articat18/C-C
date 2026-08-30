@@ -122,8 +122,9 @@ def _group_users(users, ytr):
     return u2pos, u2neg, valid_u
 
 def _fit_fm_bpr(splits, k=16, lr=0.001, epochs=40, patience=4, seed=0, verbose=True,
-                neg_per_pos=4, bpr_weight=1.0, bce_weight=0.1, l2=1e-5):
-    enc, dim = encode(splits)
+                neg_per_pos=4, bpr_weight=1.0, bce_weight=0.1, l2=1e-5,
+                encode_fn=encode):
+    enc, dim = encode_fn(splits)
     Xtr, ytr, utr = enc['train']; Xva, yva, uva = enc['valid']; Xte, yte, ute = enc['test']
     m = FM(dim, k=k, lr=lr, l2=l2, seed=seed)
     rng = np.random.default_rng(seed)

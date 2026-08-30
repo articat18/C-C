@@ -5,6 +5,7 @@ import unittest
 from unittest import mock
 
 import baseline
+from candidates.feature_pipeline import encode_candidate_splits
 from data import encode
 from experiment_engine.approval import (
     APPROVAL_PHRASE,
@@ -39,16 +40,23 @@ class FinalizationTests(unittest.TestCase):
             return (self.root / path).resolve()
         return path
 
-    def _registered_spec(self):
-        spec = ExperimentSpec.from_mapping(
-            {
+    def _registered_spec(self, *, operator="none"):
+        value = {
                 "schema_version": 1,
                 "experiment_id": "E0077",
                 "template": "bpr_hybrid",
                 "hypothesis": "Verify human-gated finalization.",
                 "budget": {"max_epochs": 1, "max_wall_seconds": 60},
-            }
-        )
+        }
+        if operator != "none":
+            value.update({
+                "schema_version": 2,
+                "stage": "cleaning",
+                "operator": operator,
+                "evidence": "Zero duration needs an explicit category.",
+                "expected_effect": "Preserve the selected feature through finalization.",
+            })
+        spec = ExperimentSpec.from_mapping(value)
         directory = self.experiments / spec.experiment_id
         directory.mkdir()
         (directory / "spec.json").write_text(
@@ -146,6 +154,61 @@ class FinalizationTests(unittest.TestCase):
         self.assertTrue(
             (self.experiments / spec.experiment_id / "final-result.json").is_file()
         )
+
+    def test_feature_operator_is_reconstructed_for_finalization(self):
+        spec = self._registered_spec(operator="missing_duration_category")
+        splits = {
+            "train": [
+                (20220408, "u", "v1", "a", "t", 0.0, 1),
+                (20220408, "u", "v2", "a", "t", 2000.0, 0),
+            ],
+            "valid": [],
+            "test": [
+                (20220429, "u", "v1", "a", "t", 0.0, 1),
+                (20220429, "u", "v2", "a", "t", 2000.0, 0),
+            ],
+        }
+        _, dimension = encode_candidate_splits(
+            splits, operator_name=spec.operator
+        )
+        model = baseline.FM(dimension, k=16, seed=0)
+        checkpoints = CheckpointManager(self.root / "experiments")
+        checkpoints.save_member(
+            spec.experiment_id,
+            0,
+            model=model,
+            metadata={"spec_fingerprint": spec.fingerprint()},
+        )
+        with mock.patch(
+            "experiment_engine.approval.resolve_editable_path",
+            side_effect=self._sandbox_path,
+        ):
+            grant_final_approval(
+                spec.experiment_id,
+                approved_by="teammate",
+                confirmation=APPROVAL_PHRASE,
+                registry=self.registry,
+            )
+
+        submission = self.root / "runs" / "E0077" / "feature-submission.csv"
+        with mock.patch(
+            "experiment_engine.finalize.resolve_editable_path",
+            side_effect=self._sandbox_path,
+        ), mock.patch(
+            "experiment_engine.approval.resolve_editable_path",
+            side_effect=self._sandbox_path,
+        ), mock.patch(
+            "experiment_engine.finalize.load", return_value=splits
+        ):
+            result = finalize_experiment(
+                spec.experiment_id,
+                submission_path=submission,
+                registry=self.registry,
+                checkpoint_manager=checkpoints,
+            )
+
+        self.assertEqual(result["status"], "finalized")
+        self.assertTrue(submission.is_file())
 
 
 if __name__ == "__main__":

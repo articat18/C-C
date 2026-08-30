@@ -1,4 +1,4 @@
-"""Bounded Gemini-driven Phase 3 loop.
+"""Bounded Gemini-driven governed research loop.
 
 Each model suggestion is validated before execution and every decision is
 written to a local append-only audit log.  Execution is opt-in via ``--execute``.
@@ -14,13 +14,13 @@ from typing import Any
 
 from agent.proposal import GeminiProposalClient
 from agent.context import build_agent_context
-from experiment_engine.orchestrator import Phase3Orchestrator
+from experiment_engine.orchestrator import ResearchOrchestrator
 from experiment_boundary import resolve_editable_path
 
 
-class AutonomousPhase3Agent:
+class AutonomousResearchAgent:
     def __init__(self) -> None:
-        self.orchestrator = Phase3Orchestrator()
+        self.orchestrator = ResearchOrchestrator()
         self.client = GeminiProposalClient()
 
     def run(
@@ -41,14 +41,18 @@ class AutonomousPhase3Agent:
                     decisions.append({"status": "blocked", "reason": "converged"})
                     break
                 self.orchestrator.controller.continue_research(
-                    "Autonomous Phase 3 agent: select a new approved direction after convergence."
+                    "Autonomous Phase 4 agent: select a new approved direction after convergence."
                 )
             proposal = self.client.propose({**context, "status": status})
             decision: dict[str, Any] = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "proposal": {
                     "template": proposal.template,
+                    "stage": proposal.stage,
+                    "operator": proposal.operator,
                     "hypothesis": proposal.hypothesis,
+                    "evidence": proposal.evidence,
+                    "expected_effect": proposal.expected_effect,
                     "parameters": proposal.parameters,
                     "seed": proposal.seed,
                 },
@@ -79,7 +83,7 @@ def main() -> int:
         if args.context
         else build_agent_context()
     )
-    decisions = AutonomousPhase3Agent().run(
+    decisions = AutonomousResearchAgent().run(
         context,
         max_steps=args.max_steps,
         execute=args.execute,
@@ -91,3 +95,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# Compatibility for callers using the Phase 3 class name.
+AutonomousPhase3Agent = AutonomousResearchAgent

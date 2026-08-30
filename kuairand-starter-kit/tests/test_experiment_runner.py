@@ -24,10 +24,14 @@ class ExperimentRunnerTests(unittest.TestCase):
     def test_runner_seals_test_split_and_writes_checkpoint(self):
         spec = ExperimentSpec.from_mapping(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "experiment_id": "E0099",
                 "template": "bpr_hybrid",
+                "stage": "cleaning",
+                "operator": "missing_duration_category",
                 "hypothesis": "Exercise the deterministic runner contract.",
+                "evidence": "Zero duration needs a distinct missing category.",
+                "expected_effect": "Separate missing duration from genuine short videos.",
                 "parameters": {"popularity_weight": 0.0},
                 "budget": {"max_epochs": 1, "max_wall_seconds": 60},
             }
@@ -42,13 +46,9 @@ class ExperimentRunnerTests(unittest.TestCase):
         def fake_fit(splits, **kwargs):
             self.assertEqual(splits["test"], [])
             self.assertEqual(kwargs["epochs"], 1)
-            encoded = {
-                "valid": (
-                    np.asarray([[0], [1]], dtype=np.int32),
-                    np.asarray([1, 0], dtype=np.float32),
-                    ["u", "u"],
-                )
-            }
+            encoded, _ = kwargs["encode_fn"](splits)
+            self.assertEqual(encoded["train"][0].shape[1], 6)
+            self.assertEqual(encoded["valid"][0].shape[1], 6)
             return model, encoded
 
         loaded = {
@@ -62,7 +62,7 @@ class ExperimentRunnerTests(unittest.TestCase):
         manager = CheckpointManager(Path(self.temporary.name) / "experiments")
         with mock.patch(
             "experiment_engine.experiment_runner.load", return_value=loaded
-        ), mock.patch(
+        ) as data_load, mock.patch(
             "experiment_engine.experiment_runner.baseline_models._fit_fm_bpr",
             side_effect=fake_fit,
         ):
@@ -70,10 +70,16 @@ class ExperimentRunnerTests(unittest.TestCase):
                 spec, checkpoint_manager=manager, verbose=False
             )
 
+        data_load.assert_called_once_with(
+            str(spec.resolved_data_dir()), split_names=("train", "valid")
+        )
         self.assertEqual(result["selection_split"], "valid")
         self.assertEqual(result["metrics"]["valid"]["primary"], 1.0)
         self.assertNotIn("test", result["metrics"])
         self.assertEqual(len(result["checkpoints"]), 1)
+        self.assertEqual(result["stage"], "cleaning")
+        self.assertEqual(result["operator"], "missing_duration_category")
+        self.assertEqual(result["encoded_fields"][-1], "duration_missing")
         self.assertIn("baseline_comparison", result["diagnostics"])
         self.assertIn("validation_subgroups", result["diagnostics"])
         self.assertTrue(result["diagnostics"]["validation_subgroups"])

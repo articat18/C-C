@@ -13,7 +13,8 @@ from typing import Any
 import numpy as np
 
 import baseline as baseline_models
-from data import encode, load
+from candidates.feature_pipeline import encode_candidate_splits
+from data import load
 from evaluate import evaluate
 from submit import write_submission
 from experiment_engine.approval import ApprovalError, require_final_approval
@@ -62,7 +63,9 @@ def finalize_experiment(
     submission.parent.mkdir(parents=True, exist_ok=True)
 
     splits = load(str(spec.resolved_data_dir()))
-    encoded, dimension = encode(splits)
+    encoded, dimension = encode_candidate_splits(
+        splits, operator_name=spec.operator
+    )
     X_test, labels_test, users_test = encoded["test"]
     template = get_template(spec.template)
     member_predictions = []
@@ -101,6 +104,8 @@ def finalize_experiment(
         "experiment_id": experiment_id,
         "spec_fingerprint": spec.fingerprint(),
         "status": "finalized",
+        "stage": spec.stage,
+        "operator": spec.operator,
         "approval": {
             "approved_by": approval["approved_by"],
             "approved_at": approval["approved_at"],

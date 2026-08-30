@@ -70,9 +70,10 @@ its structured report:
 python3 -m experiment_engine.reproduce_baseline --output runs/baseline-reproduction.json
 ```
 
-Candidate experiments use strict JSON specifications and a closed catalog of
-approved templates. Ask the controller to reserve the next unused experiment ID
-and create a default specification:
+Candidate experiments use strict, backward-compatible JSON specifications and
+closed catalogues of approved model templates and pipeline operators. Ask the
+controller to reserve the next unused experiment ID and create a default scalar
+specification:
 
 ```bash
 python3 -m experiment_engine.controller create \
@@ -132,7 +133,7 @@ After reviewing the validated proposal, explicitly execute it with:
 python3 -m agent.run --context analysis/dataset-profile.json --execute
 ```
 
-For a bounded multi-step autonomous Phase 3 run, use the agent loop. Omit
+For a bounded multi-step governed research run, use the agent loop. Omit
 `--execute` to collect proposals only:
 
 ```bash
@@ -158,6 +159,40 @@ exceeded the protected baseline. All selection remains validation-only; test
 evaluation still requires a separate human approval receipt. Phase 4 is now the
 next milestone.
 
+### Phase 4 governed operator workflow
+
+Schema-version-2 specifications record a pipeline stage, one reviewed operator,
+the evidence behind the hypothesis, and its expected effect. The first reviewed
+operators are:
+
+| Operator | Stage | Purpose |
+|---|---|---|
+| `missing_duration_category` | `cleaning` | Separate zero/missing duration from observed duration |
+| `video_popularity_bucket` | `features` | Add a training-only video impression-count bucket |
+
+The candidate encoder adds the selected field without modifying protected
+`data.py`. Operator state and vocabularies are fitted on training only; the same
+recorded operator is reconstructed during human-approved finalization.
+
+After reviewing Phase 3 convergence, explicitly open a new research window and
+reserve one operator experiment:
+
+```bash
+python3 -m experiment_engine.controller continue \
+  --reason "Begin Phase 4 reviewed cleaning and feature operators."
+python3 -m experiment_engine.controller create \
+  --template bpr_hybrid \
+  --stage features \
+  --operator video_popularity_bucket \
+  --hypothesis "Training-only video popularity improves validation ranking." \
+  --evidence "Validation diagnostics differ across item-popularity groups." \
+  --expected-effect "Improve cold-item ordering without reducing GAUC."
+```
+
+The schema enforces one change per iteration: a cleaning or feature operator
+cannot be combined with a model-parameter change. Existing schema-version-1
+Phase 3 specifications retain their original serialization and fingerprints.
+
 Candidate decisions start from the protected published validation baseline,
 not an empty registry. A result is kept only when it improves that baseline or a
 better prior experiment by more than `0.002`.
@@ -182,9 +217,9 @@ The initial approved templates are:
 | `bpr_ensemble` | Three consecutive-seed hybrid-BPR FMs with an optional popularity prior |
 
 Specifications cannot contain commands, Python paths, or source code. Unknown
-fields and parameters are rejected. Add a reviewed template to
-`experiment_engine/experiment_templates.py` when a genuinely new experiment
-family is ready.
+fields, parameters, stages, and operators are rejected. Add reviewed model
+templates to `experiment_engine/experiment_templates.py` and reviewed pipeline
+operators to `candidates/feature_pipeline.py`.
 
 ## Implementation Status
 
@@ -196,15 +231,15 @@ The project follows the phases in the repository-level `ARCHITECTURE.md`:
 | Phase 1: deterministic experiment spine | Complete |
 | Phase 2: EDA and subgroup diagnostics | Complete |
 | Phase 3: first bounded research cycle | Complete (best candidate 0.60114; baseline 0.6016) |
-| Phase 4: governed full-stack autonomy | Next (typed proposals and reviewed operators first) |
+| Phase 4: governed full-stack autonomy | In progress (4A complete; first 4B operators integrated) |
 | Phase 5: advanced ranking | Planned |
 | Phase 6: optional multi-agent expansion | Deferred |
 
-Gemini connectivity currently proposes scalar changes within the two approved
-BPR templates. Phase 4 expands this into governed choices across cleaning,
-features, loss, model, and training strategy, followed by a sandboxed
-candidate-code path after the reviewed operator loop is reliable. See the
-repository-level `ARCHITECTURE.MD` for its safety gates and completion criteria.
+Gemini proposals now use the schema-version-2 contract and can choose one
+reviewed cleaning or feature operator, or one scalar change across loss, model,
+and training stages. Sandboxed candidate-code generation remains deferred until
+the reviewed operator loop is reliable. See the repository-level
+`ARCHITECTURE.MD` for its safety gates and completion criteria.
 
 Run the deterministic Phase 2 dataset profile with:
 

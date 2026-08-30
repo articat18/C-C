@@ -9,13 +9,15 @@ from pathlib import Path
 import re
 from typing import Any, Mapping
 
+from candidates.feature_pipeline import validate_pipeline_selection
 from experiment_engine.experiment_templates import get_template
 from experiment_boundary import MAX_WALL_SECONDS, REPOSITORY_ROOT
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 EXPERIMENT_ID = re.compile(r"E[0-9]{4,8}")
-TOP_LEVEL_FIELDS = {
+V1_TOP_LEVEL_FIELDS = {
     "schema_version",
     "experiment_id",
     "template",
@@ -25,7 +27,24 @@ TOP_LEVEL_FIELDS = {
     "budget",
     "hypothesis",
 }
+V2_TOP_LEVEL_FIELDS = V1_TOP_LEVEL_FIELDS | {
+    "stage",
+    "operator",
+    "evidence",
+    "expected_effect",
+}
 MAX_EPOCHS = 40
+
+PARAMETER_STAGES = {
+    "bpr_weight": "loss",
+    "bce_weight": "loss",
+    "embedding_dim": "model",
+    "popularity_weight": "model",
+    "learning_rate": "training",
+    "l2": "training",
+    "patience": "training",
+    "negatives_per_positive": "training",
+}
 
 
 class SpecificationError(ValueError):
@@ -72,12 +91,28 @@ class ExperimentSpec:
     parameters: Mapping[str, int | float]
     budget: ExperimentBudget
     hypothesis: str
+    stage: str = "training"
+    operator: str = "none"
+    evidence: str = ""
+    expected_effect: str = ""
 
     @classmethod
     def from_mapping(cls, value: Any) -> "ExperimentSpec":
         if not isinstance(value, Mapping):
             raise SpecificationError("experiment specification must be a JSON object")
-        unknown = sorted(set(value) - TOP_LEVEL_FIELDS)
+        schema_version = value.get("schema_version")
+        if (
+            isinstance(schema_version, bool)
+            or schema_version not in SUPPORTED_SCHEMA_VERSIONS
+        ):
+            raise SpecificationError(
+                f"schema_version must be one of {list(SUPPORTED_SCHEMA_VERSIONS)}; "
+                f"received {schema_version!r}"
+            )
+        allowed_fields = (
+            V1_TOP_LEVEL_FIELDS if schema_version == 1 else V2_TOP_LEVEL_FIELDS
+        )
+        unknown = sorted(set(value) - allowed_fields)
         if unknown:
             raise SpecificationError(
                 f"unknown specification fields: {', '.join(unknown)}"
@@ -88,11 +123,6 @@ class ExperimentSpec:
         )
         if missing:
             raise SpecificationError(f"missing required fields: {', '.join(missing)}")
-        if value["schema_version"] != SCHEMA_VERSION:
-            raise SpecificationError(
-                f"schema_version must be {SCHEMA_VERSION}; received "
-                f"{value['schema_version']!r}"
-            )
         experiment_id = value["experiment_id"]
         if not isinstance(experiment_id, str) or not EXPERIMENT_ID.fullmatch(experiment_id):
             raise SpecificationError("experiment_id must match E followed by 4-8 digits")
@@ -112,12 +142,48 @@ class ExperimentSpec:
             raise SpecificationError("hypothesis must be a non-empty string")
         if len(hypothesis) > 2000:
             raise SpecificationError("hypothesis must contain at most 2000 characters")
+        if schema_version == 1:
+            stage = infer_pipeline_stage(template_name, raw_parameters)
+            operator = "none"
+            evidence = ""
+            expected_effect = ""
+        else:
+            typed_missing = sorted(
+                {"stage", "operator", "evidence", "expected_effect"} - set(value)
+            )
+            if typed_missing:
+                raise SpecificationError(
+                    f"schema version 2 is missing required fields: {', '.join(typed_missing)}"
+                )
+            stage = value["stage"]
+            operator = value["operator"]
+            evidence = value["evidence"]
+            expected_effect = value["expected_effect"]
+            if not isinstance(stage, str) or not isinstance(operator, str):
+                raise SpecificationError("stage and operator must be strings")
+            try:
+                validate_pipeline_selection(stage, operator)
+            except ValueError as exc:
+                raise SpecificationError(str(exc)) from exc
+            for field_name, field_value in (
+                ("evidence", evidence),
+                ("expected_effect", expected_effect),
+            ):
+                if not isinstance(field_value, str) or not field_value.strip():
+                    raise SpecificationError(f"{field_name} must be a non-empty string")
+                if len(field_value) > 4000:
+                    raise SpecificationError(
+                        f"{field_name} must contain at most 4000 characters"
+                    )
+            evidence = evidence.strip()
+            expected_effect = expected_effect.strip()
+            _validate_one_change(template_name, parameters, stage, operator)
         data_dir = value.get("data_dir", "./KuaiRand-Pure/data")
         if not isinstance(data_dir, str) or not data_dir.strip():
             raise SpecificationError("data_dir must be a non-empty string")
         _resolve_repository_path(data_dir)
         return cls(
-            schema_version=SCHEMA_VERSION,
+            schema_version=schema_version,
             experiment_id=experiment_id,
             template=template_name,
             data_dir=data_dir,
@@ -125,6 +191,10 @@ class ExperimentSpec:
             parameters=parameters,
             budget=ExperimentBudget.from_mapping(value.get("budget", {})),
             hypothesis=hypothesis.strip(),
+            stage=stage,
+            operator=operator,
+            evidence=evidence,
+            expected_effect=expected_effect,
         )
 
     @classmethod
@@ -137,7 +207,7 @@ class ExperimentSpec:
         return cls.from_mapping(value)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        value = {
             "schema_version": self.schema_version,
             "experiment_id": self.experiment_id,
             "template": self.template,
@@ -150,6 +220,14 @@ class ExperimentSpec:
             },
             "hypothesis": self.hypothesis,
         }
+        if self.schema_version >= 2:
+            value.update({
+                "stage": self.stage,
+                "operator": self.operator,
+                "evidence": self.evidence,
+                "expected_effect": self.expected_effect,
+            })
+        return value
 
     def fingerprint(self) -> str:
         canonical = json.dumps(
@@ -171,3 +249,43 @@ def _resolve_repository_path(value: str) -> Path:
     except ValueError as exc:
         raise SpecificationError(f"data_dir must stay inside the repository: {resolved}") from exc
     return resolved
+
+
+def infer_pipeline_stage(
+    template_name: str, parameters: Mapping[str, Any] | None
+) -> str:
+    """Infer the scalar-change stage for compatibility with older call sites."""
+
+    template = get_template(template_name)
+    normalized = template.normalize_parameters(parameters or {})
+    defaults = template.normalize_parameters({})
+    changed = [name for name, value in normalized.items() if value != defaults[name]]
+    if len(changed) == 1:
+        return PARAMETER_STAGES[changed[0]]
+    return "training"
+
+
+def _validate_one_change(
+    template_name: str,
+    parameters: Mapping[str, int | float],
+    stage: str,
+    operator: str,
+) -> None:
+    template = get_template(template_name)
+    defaults = template.normalize_parameters({})
+    changed = [name for name, value in parameters.items() if value != defaults[name]]
+    if operator != "none":
+        if changed:
+            raise SpecificationError(
+                "cleaning and feature experiments must hold model parameters at template defaults"
+            )
+        return
+    if len(changed) > 1:
+        raise SpecificationError(
+            f"schema version 2 permits one scalar change; received {sorted(changed)}"
+        )
+    if changed and PARAMETER_STAGES[changed[0]] != stage:
+        raise SpecificationError(
+            f"parameter {changed[0]!r} belongs to stage "
+            f"{PARAMETER_STAGES[changed[0]]!r}, not {stage!r}"
+        )

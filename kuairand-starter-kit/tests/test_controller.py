@@ -114,6 +114,9 @@ class ExperimentControllerTests(unittest.TestCase):
         self.assertEqual(spec.experiment_id, "E0003")
         self.assertEqual(path, experiments / "E0003" / "spec.json")
         self.assertTrue(path.is_file())
+        self.assertEqual(spec.schema_version, 2)
+        self.assertEqual(spec.stage, "loss")
+        self.assertEqual(spec.operator, "none")
         self.assertAlmostEqual(spec.parameters["bpr_weight"], 0.5)
 
     def test_status_uses_published_baseline_as_initial_best(self):

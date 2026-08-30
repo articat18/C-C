@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from candidates.feature_pipeline import PIPELINE_STAGES, operator_contracts
 from experiment_engine.controller import ExperimentController
 from experiment_engine.registry import ExperimentRegistry
 
@@ -31,6 +32,8 @@ def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
             spec = json.loads(spec_path.read_text(encoding="utf-8"))
             item["seed"] = spec.get("seed")
             item["parameters"] = spec.get("parameters", {})
+            item["stage"] = spec.get("stage")
+            item["operator"] = spec.get("operator")
         experiments.append(item)
     continuation_path = Path("experiments/research_windows.jsonl")
     continuations = []
@@ -41,7 +44,7 @@ def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
     diagnostics_path = Path("analysis/dataset-profile.json")
     diagnostics = json.loads(diagnostics_path.read_text(encoding="utf-8")) if diagnostics_path.is_file() else {}
     return {
-        "phase": 3,
+        "phase": 4,
         "baseline": {"primary": controller.baseline.primary, "name": controller.baseline.name},
         "status": controller.status(),
         "experiments": experiments,
@@ -50,8 +53,11 @@ def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
         "constraints": {
             "selection_split": "valid",
             "test_accessed": False,
+            "approved_stages": list(PIPELINE_STAGES),
+            "approved_operators": operator_contracts(),
             "approved_templates": ["bpr_hybrid", "bpr_ensemble"],
-            "instruction": "Choose an evidence-backed direction; do not repeat exhausted BPR settings without justification.",
+            "one_change_per_iteration": True,
+            "instruction": "Choose one evidence-backed operator or scalar change; do not repeat exhausted BPR settings without justification.",
         },
     }
 

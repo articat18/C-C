@@ -250,24 +250,27 @@ stay deterministic and outside the agent.
 
 #### 4A: Typed pipeline proposals
 
-- Replace the current `template + scalar parameters` proposal with a typed
+- **Complete:** replace the current `template + scalar parameters` proposal with a typed
   contract containing the target pipeline stage, hypothesis, evidence from
   prior diagnostics and experiments, transformation or experiment family,
   bounded parameters, expected effect, and seed.
-- Allow the target stage to be one of `cleaning`, `features`, `loss`, `model`,
+- **Complete:** allow the target stage to be one of `cleaning`, `features`, `loss`, `model`,
   or `training`; reject unknown stages and transformations before execution.
-- Preserve the one-change rule: each iteration changes one feature family,
+- **Complete:** preserve the one-change rule: each iteration changes one feature family,
   cleaning decision, loss decision, model decision, or training decision.
-- Include available operators, prior outcomes, convergence state, and subgroup
+- **Complete:** include available operators, prior outcomes, convergence state, and subgroup
   regressions in the agent context so the next proposal is evidence-driven.
 
 #### 4B: Reviewed operator catalogue
 
-- Add approved experiment families for missing-duration handling, duplicate
+- **In progress:** the candidate-owned encoder and the first reviewed
+  `missing_duration_category` and `video_popularity_bucket` operators are
+  integrated through training, checkpoints, and finalization. Add the remaining
+  approved experiment families for duplicate
   handling and weighting, item popularity and smoothed engagement rates,
   user-author/tag/duration/music affinities, repeat exposure and recency, time
   and distribution-shift features, and loss or sampling strategy.
-- Connect `candidates/history_features.py` to experiment specifications and the
+- Connect the remaining operators in `candidates/history_features.py` to experiment specifications and the
   runner so the agent can select leakage-safe historical features rather than
   merely discuss them.
 - Run cleaning and feature ablations in the order defined by the data and
@@ -337,8 +340,8 @@ The orchestrator remains the only owner of experiment state, budgets, convergenc
 
 ## Immediate Milestone
 
-Phases 0, 1, 2, and 3 are complete. The next milestone is Phase 4A and 4B:
-expand the proposal contract, connect reviewed cleaning and leakage-safe
-historical-feature operators to the runner, and let the agent select them from
-Phase 2 evidence. Sandboxed candidate-code generation follows only after that
-operator loop passes its safety and recovery checks.
+Phases 0, 1, 2, 3, and 4A are complete. Phase 4B is in progress: run the first
+reviewed cleaning and popularity operators, then add duplicate handling,
+affinity, exposure, recency, and time operators one family at a time. Sandboxed
+candidate-code generation follows only after that operator loop passes its
+safety and recovery checks.

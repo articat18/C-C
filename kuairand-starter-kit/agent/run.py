@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from agent.proposal import GeminiProposalClient
-from experiment_engine.orchestrator import Phase3Orchestrator
+from experiment_engine.orchestrator import ResearchOrchestrator
 
 
 def main() -> int:
@@ -28,14 +28,18 @@ def main() -> int:
         parser.error(f"Gemini did not return an approved proposal: {exc}")
     payload = {
         "template": proposal.template,
+        "stage": proposal.stage,
+        "operator": proposal.operator,
         "hypothesis": proposal.hypothesis,
+        "evidence": proposal.evidence,
+        "expected_effect": proposal.expected_effect,
         "parameters": proposal.parameters,
         "seed": proposal.seed,
     }
     if not args.execute:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
-    result = Phase3Orchestrator().run_proposal(proposal, verbose=not args.quiet)
+    result = ResearchOrchestrator().run_proposal(proposal, verbose=not args.quiet)
     print(json.dumps({"proposal": payload, "execution": result}, indent=2, default=str))
     return 0
 
