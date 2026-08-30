@@ -113,6 +113,20 @@ class FeaturePipelineTests(unittest.TestCase):
         np.testing.assert_allclose(kwargs["p"], np.asarray([0.25, 0.25, 0.5]))
         self.assertFalse(kwargs["replace"])
 
+    def test_weighted_sampler_replaces_when_request_exceeds_pool(self):
+        rng = mock.Mock()
+        rng.choice.return_value = np.asarray([0, 0])
+        baseline._sample_pool(
+            rng,
+            [0],
+            2,
+            np.asarray([0.5]),
+        )
+
+        _, kwargs = rng.choice.call_args
+        self.assertTrue(kwargs["replace"])
+        np.testing.assert_array_equal(kwargs["p"], np.asarray([1.0]))
+
 
 if __name__ == "__main__":
     unittest.main()

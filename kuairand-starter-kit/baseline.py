@@ -197,11 +197,12 @@ def _sample_pool(rng, pool, size, sample_weights=None):
 
     if size == 0:
         return np.asarray([], dtype=np.int64)
+    replace = size > len(pool)
     probabilities = None
     if sample_weights is not None:
         probabilities = sample_weights[np.asarray(pool, dtype=np.int64)]
         probabilities = probabilities / probabilities.sum()
-    return rng.choice(pool, size=size, replace=False, p=probabilities)
+    return rng.choice(pool, size=size, replace=replace, p=probabilities)
 
 def run_fm_bpr(splits, k=16, lr=0.001, epochs=40, patience=4, seed=0, verbose=True,
                neg_per_pos=4, bpr_weight=1.0, bce_weight=0.1, l2=1e-5):
