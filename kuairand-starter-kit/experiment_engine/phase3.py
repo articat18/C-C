@@ -77,8 +77,6 @@ def run_phase3(
     results = []
     for path in paths:
         spec = ExperimentSpec.load(path)
-        if not spec.hypothesis.startswith("Phase 3:"):
-            raise ValueError(f"not a Phase 3 specification: {path}")
         results.append(controller.run(spec, verbose=verbose))
     return results
 
