@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+from pathlib import Path
 import platform
 import subprocess
 import time
@@ -167,10 +169,16 @@ def run_experiment(
         "checkpoints": checkpoints,
         "rows": {"train": len(splits["train"]), "valid": len(splits["valid"])},
         "duration_seconds": round(duration, 6),
+        "resources": {
+            "training_seconds": round(duration, 6),
+            "gpu_hours": 0.0,
+            "accelerator": "cpu_numpy",
+        },
         "environment": {
             "python": platform.python_version(),
             "numpy": np.__version__,
             "git_revision": _git_revision(),
+            "code_diff_hash": _git_diff_hash(),
         },
         "completed_at": _utc_now(),
     }
@@ -204,5 +212,18 @@ def _git_revision() -> str | None:
             capture_output=True,
             text=True,
         ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def _git_diff_hash() -> str | None:
+    try:
+        completed = subprocess.run(
+            ["git", "diff", "--binary", "--", "."],
+            check=True,
+            capture_output=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+        return hashlib.sha256(completed.stdout).hexdigest()
     except (OSError, subprocess.CalledProcessError):
         return None

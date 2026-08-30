@@ -89,6 +89,7 @@ class ExperimentController:
                         "started_at": started_at,
                         "completed_at": result["completed_at"],
                         "duration_seconds": result["duration_seconds"],
+                        "resources": result.get("resources", {}),
                         "metrics": result["metrics"],
                         "diagnostics": result.get("diagnostics", {}),
                         "comparison": comparison,

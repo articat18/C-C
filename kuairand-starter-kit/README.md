@@ -218,6 +218,45 @@ The schema enforces one change per iteration: a cleaning or feature operator
 cannot be combined with a model-parameter change. Existing schema-version-1
 Phase 3 specifications retain their original serialization and fingerprints.
 
+### Sandboxed candidate patches
+
+Phase 4C candidate-code proposals are fingerprinted unified diffs restricted to
+Python files under `candidates/`. Generate one without applying it:
+
+```bash
+python3 -m agent.context --output runs/patch-context.json
+python3 -m agent.patch_run \
+  --context runs/patch-context.json \
+  --output-patch runs/patches/next.json
+```
+
+Validate it in a disposable clean checkout. This runs path and static policy,
+compilation, imports, protected hashes, leakage/alignment tests, and the full
+suite without changing the real worktree. When the artifact contains its
+structured experiment payload, validation also mounts the dataset into the
+checkout, trains through the deterministic runner, and records validation-only
+result evidence:
+
+```bash
+python3 -m agent.candidate_patch runs/patches/next.json \
+  --report runs/patch-reports/next.json
+```
+
+Promotion is a separate manual gate requiring the matching accepted report and
+a sandbox result whose decision is `keep`:
+
+```bash
+python3 -m agent.candidate_patch runs/patches/next.json \
+  --promote-report runs/patch-reports/next.json \
+  --confirmation "PROMOTE REVIEWED CANDIDATE PATCH"
+```
+
+Generate the derived Phase 4 provenance, resource, recovery, and diff audit:
+
+```bash
+python3 -m agent.audit --output runs/phase4-audit-summary.json
+```
+
 Candidate decisions start from the protected published validation baseline,
 not an empty registry. A result is kept only when it improves that baseline or a
 better prior experiment by more than `0.002`.

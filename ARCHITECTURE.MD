@@ -285,19 +285,20 @@ stay deterministic and outside the agent.
 
 #### 4C: Sandboxed candidate-code changes
 
-- After the reviewed operator loop is reliable, allow the agent to propose a
+- **Complete:** after the reviewed operator loop is reliable, allow the agent to propose a
   source patch only under `candidates/`. A proposal records the patch, rationale,
   affected contract, and content hash; experiment JSON continues to contain no
   executable commands or arbitrary Python paths.
-- Apply and execute candidate patches in an isolated temporary worktree or
-  equivalent disposable workspace. Never give this path permission to change
+- **Complete:** apply and execute candidate patch imports and tests in an isolated
+  clean archive checkout. Never give this path permission to change
   `data.py`, `evaluate.py`, `official_baseline.py`, `baseline_scores.json`, the
   controller, approval logic, registry, or prior experiment artifacts.
-- Before training, require path validation, syntax and import checks, static
+- **Complete:** before training, require path validation, syntax and import checks, static
   policy checks, leakage tests, row-alignment tests, protected hashes, and the
   full automated test suite. Reject the patch atomically if any gate fails.
-- Promote a successful candidate implementation into the reviewed catalogue
-  only with its exact diff, tests, specification, and result evidence attached.
+- **Complete:** train a sandboxed patch through a structured experiment payload;
+  promotion requires a `keep` result and attaches the exact diff, checks,
+  specification, result evidence, and manual intervention.
 
 #### 4D: Autonomous reflection, recovery, and evidence
 
@@ -305,13 +306,13 @@ stay deterministic and outside the agent.
   artifacts and execute the exact saved proposal without a second model call.
   Bind proposal/context fingerprints, available token usage, source model, and
   the manual review intervention into the experiment specification and registry.
-- Let the agent inspect each result, decide `keep`, `reject`, `refine`, or
+- **Complete:** let the agent inspect each result, decide `keep`, `reject`, `refine`, or
   `change_direction`, and continue until the convergence or budget rule stops
   the research window.
-- Add bounded recovery policies for invalid proposals, code errors, failed
+- **Complete:** add bounded recovery policies for invalid proposals, code errors, failed
   checks, training errors, and timeouts. Recovery may repair, retry once, or
   route to another approved direction without silently weakening a safety gate.
-- Record configuration and code diffs, agent reasoning, input and output token
+- **Complete:** record configuration and code diffs, agent reasoning, input and output token
   counts, total agent wall-clock, training time, GPU-hours, failures, recovery
   events, and manual interventions in the append-only run evidence.
 
