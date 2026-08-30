@@ -125,6 +125,14 @@ python3 -m agent.autonomous \
   --execute
 ```
 
+To let the agent assemble fresh context from the registry, results, continuation
+history, and diagnostics, omit `--context` or build it explicitly:
+
+```bash
+python3 -m agent.context --output runs/agent-context.json
+python3 -m agent.autonomous --max-steps 3 --execute
+```
+
 If the current research window converges, the loop stops for human review. To
 explicitly allow it to open a documented continuation window:
 

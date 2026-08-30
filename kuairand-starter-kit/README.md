@@ -145,6 +145,14 @@ python3 -m agent.autonomous \
 Continuation after convergence remains human-gated unless `--auto-continue` is
 explicitly supplied. Decisions are appended to `runs/agent-decisions.jsonl`.
 
+The agent can build a fresh evidence context from the registry, specifications,
+results, continuation history, and dataset diagnostics:
+
+```bash
+python3 -m agent.context --output runs/agent-context.json
+python3 -m agent.autonomous --max-steps 3 --execute
+```
+
 Run the strongest candidates again with `--seed 1` and `--seed 2` using the
 controller after the initial search. All selection remains validation-only; test
 evaluation still requires a separate human approval receipt.

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from agent.proposal import GeminiProposalClient
+from agent.context import build_agent_context
 from experiment_engine.orchestrator import Phase3Orchestrator
 from experiment_boundary import resolve_editable_path
 
@@ -68,12 +69,16 @@ class AutonomousPhase3Agent:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--context", type=Path, required=True)
+    parser.add_argument("--context", type=Path, help="optional context JSON; defaults to live project context")
     parser.add_argument("--max-steps", type=int, default=1)
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--auto-continue", action="store_true")
     args = parser.parse_args()
-    context = json.loads(args.context.read_text(encoding="utf-8"))
+    context = (
+        json.loads(args.context.read_text(encoding="utf-8"))
+        if args.context
+        else build_agent_context()
+    )
     decisions = AutonomousPhase3Agent().run(
         context,
         max_steps=args.max_steps,
