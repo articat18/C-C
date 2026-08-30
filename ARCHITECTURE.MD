@@ -231,10 +231,11 @@ The test split is evaluated only for the final selected model after human approv
 
 ### Phase 3: First research cycle
 
-- Move the current BPR ensemble into the candidate architecture without changing its behavior.
-- Run the bounded BPR-weight, learning-rate, and negative-count search.
-- Re-evaluate the top three configurations across three seeds.
-- Store specifications, checkpoints, evidence, and decisions in the registry.
+- **Complete:** move the current BPR ensemble into the candidate architecture without changing its behavior.
+- **Complete:** run the bounded BPR-weight, learning-rate, negative-count, embedding-size, and ensemble search.
+- **Complete:** re-evaluate the strongest configurations across three seeds.
+- **Complete:** store specifications, results, evidence, and decisions in the registry.
+- **Outcome:** no candidate exceeded the protected published validation primary of `0.6016`; the best candidate reached `0.60114`.
 
 ### Phase 4: Cleaning and historical features
 
@@ -261,6 +262,6 @@ The orchestrator remains the only owner of experiment state, budgets, convergenc
 
 ## Immediate Milestone
 
-Phases 0, 1, and 2 are complete. The next milestone is Phase 3: run the first
-bounded research cycle using the diagnostics to choose and interpret candidate
-experiments.
+Phases 0, 1, 2, and 3 are complete. The next milestone is Phase 4: run the
+cleaning and leakage-safe historical-feature ablations guided by Phase 2
+diagnostics.

@@ -153,9 +153,10 @@ python3 -m agent.context --output runs/agent-context.json
 python3 -m agent.autonomous --max-steps 3 --execute
 ```
 
-Run the strongest candidates again with `--seed 1` and `--seed 2` using the
-controller after the initial search. All selection remains validation-only; test
-evaluation still requires a separate human approval receipt.
+Phase 3's strongest candidates were re-run with `--seed 1` and `--seed 2`; none
+exceeded the protected baseline. All selection remains validation-only; test
+evaluation still requires a separate human approval receipt. Phase 4 is now the
+next milestone.
 
 Candidate decisions start from the protected published validation baseline,
 not an empty registry. A result is kept only when it improves that baseline or a
@@ -194,8 +195,8 @@ The project follows the phases in the repository-level `ARCHITECTURE.md`:
 | Phase 0: official-baseline reproduction | Complete |
 | Phase 1: deterministic experiment spine | Complete |
 | Phase 2: EDA and subgroup diagnostics | Complete |
-| Phase 3: first bounded research cycle | Next |
-| Phase 4: cleaning and historical features | Planned |
+| Phase 3: first bounded research cycle | Complete (best candidate 0.60114; baseline 0.6016) |
+| Phase 4: cleaning and historical features | Next |
 | Phase 5: advanced ranking | Planned |
 | Phase 6: optional multi-agent expansion | Deferred |
 
