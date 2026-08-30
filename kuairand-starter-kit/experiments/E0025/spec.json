@@ -1,0 +1,38 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "The validation set exhibits temporal drift. While raw popularity bucket features (E0021) did not improve the baseline, normalized quality signals such as engagement rates often generalize better out-of-time.",
+  "expected_effect": "A smoothed long-view rate will provide a more stable, quality-focused signal for unseen or temporally shifted validation data, improving ranking metrics.",
+  "experiment_id": "E0025",
+  "hypothesis": "Bucketizing the training-only video long-view rate with a Bayesian smoothing prior will enable the model to learn reliable video quality embeddings, resulting in an improved validation ranking.",
+  "operator": "smoothed_video_long_view_rate",
+  "parameters": {
+    "bce_weight": 0.1,
+    "bpr_weight": 1.0,
+    "embedding_dim": 16,
+    "l2": 1e-05,
+    "learning_rate": 0.001,
+    "negatives_per_positive": 4,
+    "patience": 4,
+    "popularity_weight": 0.0
+  },
+  "provenance": {
+    "context_fingerprint": "1f95453c063347de387564328a0f6524b239689bb0a18b1d788f97cb8d215c06",
+    "manual_interventions": 1,
+    "proposal_fingerprint": "e933e7e2fa9643a53cfa295b28b997cf847529fadae2a251d3d2700e55f6d8a3",
+    "source_model": "gemini-3.1-pro-preview-customtools",
+    "token_usage": {
+      "input_tokens": 9495,
+      "output_tokens": 275,
+      "thought_tokens": 1138,
+      "total_tokens": 10908
+    }
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "features",
+  "template": "bpr_hybrid"
+}
