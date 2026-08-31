@@ -13,7 +13,7 @@ from pathlib import Path
 import time
 from typing import Any
 
-from agent.proposal import GeminiProposalClient
+from agent.proposal import ExperimentProposal, GeminiProposalClient, context_fingerprint
 from agent.context import build_agent_context
 from experiment_engine.orchestrator import ResearchOrchestrator
 from experiment_engine.experiment_runner import ExperimentTimeout
@@ -53,24 +53,34 @@ class AutonomousResearchAgent:
                 self.orchestrator.controller.continue_research(
                     "Autonomous Phase 4 agent: select a new approved direction after convergence."
                 )
+            proposal_recovery = None
             try:
                 proposal = self.client.propose({**context, "status": status})
             except (RuntimeError, ValueError) as exc:
-                decision = {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "status": "blocked",
-                    "reason": "invalid_or_unavailable_proposal",
-                    "recovery": {
-                        "error_type": type(exc).__name__,
-                        "error": str(exc),
-                        "action": "route_to_review",
-                        "retry_count": 1,
-                    },
-                    "agent_wall_seconds": round(time.monotonic() - step_started, 6),
+                proposal = _fallback_proposal(context)
+                if proposal is None:
+                    decision = {
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "status": "blocked",
+                        "reason": "invalid_or_unavailable_proposal",
+                        "recovery": {
+                            "error_type": type(exc).__name__,
+                            "error": str(exc),
+                            "action": "route_to_review",
+                            "retry_count": 1,
+                        },
+                        "agent_wall_seconds": round(time.monotonic() - step_started, 6),
+                    }
+                    decisions.append(decision)
+                    _append_decision(decision)
+                    break
+                proposal_recovery = {
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "action": "deterministic_fallback",
+                    "retry_count": 1,
+                    "selected_operator": proposal.operator,
                 }
-                decisions.append(decision)
-                _append_decision(decision)
-                break
             decision: dict[str, Any] = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "proposal": {
@@ -83,9 +93,12 @@ class AutonomousResearchAgent:
                     "parameters": proposal.parameters,
                     "seed": proposal.seed,
                     "control_experiment_id": proposal.control_experiment_id,
+                    "research_source_ids": list(proposal.research_source_ids),
                 },
                 "proposal_provenance": dict(proposal.provenance),
             }
+            if proposal_recovery is not None:
+                decision["recovery"] = proposal_recovery
             if execute:
                 try:
                     decision["execution"] = self.orchestrator.run_proposal(
@@ -161,6 +174,61 @@ def _reflect(execution: dict[str, Any]) -> dict[str, Any]:
         "weakest_validation_subgroups": weakest,
         "test_accessed": False,
     }
+
+
+def _fallback_proposal(context: dict[str, Any]) -> ExperimentProposal | None:
+    """Route around an unavailable/invalid model proposal with one safe screen.
+
+    The fallback is deliberately finite and catalog-only: it never invents a
+    model, changes multiple parameters, or proceeds without recorded evidence.
+    """
+    sources = context.get("research_sources", [])
+    source_id = next(
+        (item.get("source_id") for item in sources if isinstance(item, dict)
+         and isinstance(item.get("source_id"), str)),
+        None,
+    )
+    if source_id is None:
+        return None
+    used = {
+        item.get("operator")
+        for item in context.get("experiments", [])
+        if isinstance(item, dict) and item.get("status") == "success"
+    }
+    for operator in (
+        "date_period_bucket",
+        "video_popularity_bucket",
+        "smoothed_video_long_view_rate",
+        "user_activity_bucket",
+        "author_popularity_bucket",
+        "user_tab_affinity",
+        "user_author_affinity",
+        "video_tab_affinity",
+    ):
+        if operator in used:
+            continue
+        return ExperimentProposal(
+            template="pointwise_fm",
+            stage="features",
+            operator=operator,
+            hypothesis=(
+                f"Screen {operator} after the proposal service returned an invalid "
+                "or unavailable response."
+            ),
+            evidence=(
+                "Use the saved research source and validation diagnostics; this "
+                "deterministic recovery changes one training-fitted feature only."
+            ),
+            expected_effect="Measure whether the isolated feature improves validation ranking.",
+            parameters={},
+            provenance={
+                "context_fingerprint": context_fingerprint(context),
+                "source_model": "deterministic_recovery",
+                "token_usage": {},
+            },
+            research_source_ids=(source_id,),
+        )
+    return None
 
 
 def _append_decision(decision: dict[str, Any]) -> None:

@@ -77,6 +77,31 @@ class AutonomousAgentTests(unittest.TestCase):
         self.assertEqual(decisions[0]["recovery"]["action"], "retry_once")
         self.assertEqual(decisions[0]["reflection"]["decision"], "change_direction")
 
+    def test_invalid_model_proposal_routes_to_source_backed_fallback(self):
+        orchestrator = mock.Mock()
+        orchestrator.controller.status.return_value = {"converged": False}
+        orchestrator.run_proposal.return_value = {
+            "result": {
+                "operator": "date_period_bucket",
+                "comparison": {"decision": "reject_or_refine", "candidate": 0.60},
+                "diagnostics": {"validation_subgroups": {}},
+            }
+        }
+        client = mock.Mock()
+        client.propose.side_effect = ValueError("multiple scalar changes")
+        agent = AutonomousResearchAgent(orchestrator=orchestrator, client=client)
+        context = {
+            "research_sources": [{"source_id": "S-0123456789abcdef"}],
+            "experiments": [],
+        }
+        with mock.patch("agent.autonomous.resolve_editable_path", return_value=self.log), mock.patch(
+            "agent.autonomous.build_agent_context", return_value=context
+        ):
+            decisions = agent.run(context, execute=True)
+        self.assertEqual(decisions[0]["recovery"]["action"], "deterministic_fallback")
+        self.assertEqual(decisions[0]["proposal"]["operator"], "date_period_bucket")
+        orchestrator.run_proposal.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
