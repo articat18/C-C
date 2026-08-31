@@ -1,0 +1,38 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "Diagnostics identify a 1.59% unseen user rate in the validation split, and the diagnostic engine explicitly recommends investigating the 'cold_user_prior' experiment family.",
+  "expected_effect": "Explicitly bucketing users by their training interaction counts will allow the model to learn robust activity-based priors, thereby improving ranking performance for cold and low-activity users.",
+  "experiment_id": "E0028",
+  "hypothesis": "Applying the user_activity_bucket operator during the features stage will help the model distinguish between highly active and cold/unseen users, resulting in better calibrated predictions and higher validation GAUC/nDCG.",
+  "operator": "user_activity_bucket",
+  "parameters": {
+    "bce_weight": 0.1,
+    "bpr_weight": 1.0,
+    "embedding_dim": 16,
+    "l2": 1e-05,
+    "learning_rate": 0.001,
+    "negatives_per_positive": 4,
+    "patience": 4,
+    "popularity_weight": 0.0
+  },
+  "provenance": {
+    "context_fingerprint": "43f99d62b78bc0481a2c8806d98cedee366fc1eafd83d82ccf490b232a2ff75a",
+    "manual_interventions": 0,
+    "proposal_fingerprint": "71990d2ac688f959f8264cb18a88c3c6605275ae771db710253193e9f1faf0f9",
+    "source_model": "gemini-3.1-pro-preview-customtools",
+    "token_usage": {
+      "input_tokens": 27380,
+      "output_tokens": 555,
+      "thought_tokens": 2937,
+      "total_tokens": 30872
+    }
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "features",
+  "template": "bpr_hybrid"
+}

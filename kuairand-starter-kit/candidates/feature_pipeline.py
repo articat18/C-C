@@ -1,0 +1,352 @@
+"""Reviewed, train-fitted pipeline operators for candidate experiments.
+
+The official loader and encoder remain untouched. Candidate operators either
+add one categorical field to the exact official encoding or provide bounded
+training-only sampling weights. All learned state comes from the training split.
+"""
+
+from __future__ import annotations
+
+import collections
+from dataclasses import dataclass
+from typing import Any, Mapping, Sequence
+
+import numpy as np
+
+from candidates.history_features import fit_history_feature, history_feature_value
+from data import FIELDS, encode
+
+
+Row = tuple[int, str, str, str, str, float, int]
+Splits = Mapping[str, Sequence[Row]]
+PIPELINE_STAGES = ("cleaning", "features", "loss", "model", "training")
+ENGAGEMENT_PRIOR = 20.0
+HISTORY_OPERATOR_FIELDS = {
+    "video_popularity_bucket": "video_popularity",
+    "user_activity_bucket": "user_activity",
+    "author_popularity_bucket": "author_popularity",
+    "user_tab_affinity": "user_tab",
+    "user_author_affinity": "user_author",
+    "video_tab_affinity": "video_tab",
+    "user_duration_affinity": "user_duration",
+    "user_video_exposure_bucket": "user_video_exposure",
+    "video_recency_bucket": "video_recency",
+    "date_period_bucket": "date_period",
+}
+
+
+class FeatureOperatorError(ValueError):
+    """Raised when a specification selects an unsupported operator."""
+
+
+@dataclass(frozen=True)
+class FeatureOperator:
+    name: str
+    stages: tuple[str, ...]
+    field_name: str | None
+    description: str
+
+
+OPERATORS: dict[str, FeatureOperator] = {
+    "none": FeatureOperator(
+        name="none",
+        stages=("loss", "model", "training"),
+        field_name=None,
+        description="Use the protected five-field candidate input unchanged.",
+    ),
+    "missing_duration_category": FeatureOperator(
+        name="missing_duration_category",
+        stages=("cleaning",),
+        field_name="duration_missing",
+        description="Distinguish zero/missing duration from observed duration.",
+    ),
+    "video_popularity_bucket": FeatureOperator(
+        name="video_popularity_bucket",
+        stages=("features",),
+        field_name="video_popularity",
+        description="Bucket each video's training-only impression count.",
+    ),
+    "inverse_duplicate_frequency": FeatureOperator(
+        name="inverse_duplicate_frequency",
+        stages=("cleaning",),
+        field_name=None,
+        description=(
+            "Downweight repeated training interactions by the inverse frequency "
+            "of their label-free exact feature tuple."
+        ),
+    ),
+    "smoothed_video_long_view_rate": FeatureOperator(
+        name="smoothed_video_long_view_rate",
+        stages=("features",),
+        field_name="video_long_view_rate",
+        description=(
+            "Bucket each video's training-only long-view rate with a fixed "
+            "Bayesian smoothing prior."
+        ),
+    ),
+    "user_activity_bucket": FeatureOperator(
+        "user_activity_bucket", ("features",), "user_activity",
+        "Bucket each user's training-only interaction count.",
+    ),
+    "author_popularity_bucket": FeatureOperator(
+        "author_popularity_bucket", ("features",), "author_popularity",
+        "Bucket each author's training-only impression count.",
+    ),
+    "user_tab_affinity": FeatureOperator(
+        "user_tab_affinity", ("features",), "user_tab",
+        "Add a training-vocabulary user and recommendation-tab interaction.",
+    ),
+    "user_author_affinity": FeatureOperator(
+        "user_author_affinity", ("features",), "user_author",
+        "Add a training-vocabulary user and author interaction.",
+    ),
+    "video_tab_affinity": FeatureOperator(
+        "video_tab_affinity", ("features",), "video_tab",
+        "Add a training-vocabulary video and recommendation-tab interaction.",
+    ),
+    "user_duration_affinity": FeatureOperator(
+        "user_duration_affinity", ("features",), "user_duration",
+        "Add a user and training-fitted duration-bucket interaction.",
+    ),
+    "user_video_exposure_bucket": FeatureOperator(
+        "user_video_exposure_bucket", ("features",), "user_video_exposure",
+        "Bucket prior user-video exposures using training history only.",
+    ),
+    "video_recency_bucket": FeatureOperator(
+        "video_recency_bucket", ("features",), "video_recency",
+        "Bucket days since the video's prior training appearance.",
+    ),
+    "date_period_bucket": FeatureOperator(
+        "date_period_bucket", ("features",), "date_period",
+        "Bucket interaction dates using training-fitted time boundaries.",
+    ),
+}
+
+
+def operator_contracts() -> dict[str, dict[str, Any]]:
+    """Return JSON-safe operator metadata for proposal prompts and diagnostics."""
+
+    return {
+        name: {
+            "stages": list(operator.stages),
+            "field_name": operator.field_name,
+            "description": operator.description,
+        }
+        for name, operator in OPERATORS.items()
+    }
+
+
+def validate_pipeline_selection(stage: str, operator_name: str) -> FeatureOperator:
+    if stage not in PIPELINE_STAGES:
+        raise FeatureOperatorError(
+            f"unsupported pipeline stage {stage!r}; choose one of {list(PIPELINE_STAGES)}"
+        )
+    try:
+        operator = OPERATORS[operator_name]
+    except KeyError as exc:
+        raise FeatureOperatorError(
+            f"unknown operator {operator_name!r}; choose one of {sorted(OPERATORS)}"
+        ) from exc
+    if stage not in operator.stages:
+        raise FeatureOperatorError(
+            f"operator {operator_name!r} supports stages {list(operator.stages)}, "
+            f"not {stage!r}"
+        )
+    return operator
+
+
+def encode_candidate_splits(
+    splits: Splits,
+    *,
+    operator_name: str = "none",
+) -> tuple[dict[str, tuple[np.ndarray, np.ndarray, list[str]]], int]:
+    """Encode official fields plus one reviewed, training-fitted operator field."""
+
+    if operator_name not in OPERATORS:
+        raise FeatureOperatorError(f"unknown operator {operator_name!r}")
+    if OPERATORS[operator_name].field_name is None:
+        return encode(splits)
+
+    encoded, base_dimension = encode(splits)
+    state = _fit_operator(operator_name, splits["train"])
+    train_values = [
+        _operator_value(operator_name, row, state, training=True)
+        for row in splits["train"]
+    ]
+    vocabulary: dict[str, int] = {}
+    for value in train_values:
+        if value not in vocabulary:
+            vocabulary[value] = len(vocabulary)
+    unknown = len(vocabulary)
+
+    enriched: dict[str, tuple[np.ndarray, np.ndarray, list[str]]] = {}
+    for split_name, rows in splits.items():
+        X, labels, users = encoded[split_name]
+        column = np.empty((len(rows), 1), dtype=np.int32)
+        for index, row in enumerate(rows):
+            value = _operator_value(
+                operator_name,
+                row,
+                state,
+                training=split_name == "train",
+            )
+            column[index, 0] = vocabulary.get(value, unknown) + base_dimension
+        enriched[split_name] = (
+            np.concatenate((X, column), axis=1),
+            labels,
+            users,
+        )
+    return enriched, base_dimension + len(vocabulary) + 1
+
+
+def encoded_field_names(operator_name: str) -> tuple[str, ...]:
+    try:
+        operator = OPERATORS[operator_name]
+    except KeyError as exc:
+        raise FeatureOperatorError(f"unknown operator {operator_name!r}") from exc
+    return tuple(FIELDS) + (() if operator.field_name is None else (operator.field_name,))
+
+
+def training_sample_weights(
+    splits: Splits,
+    *,
+    operator_name: str = "none",
+) -> np.ndarray | None:
+    """Return row-aligned training weights for a reviewed sampling operator."""
+
+    if operator_name not in OPERATORS:
+        raise FeatureOperatorError(f"unknown operator {operator_name!r}")
+    if operator_name != "inverse_duplicate_frequency":
+        return None
+    counts = collections.Counter(_duplicate_key(row) for row in splits["train"])
+    return np.asarray(
+        [1.0 / counts[_duplicate_key(row)] for row in splits["train"]],
+        dtype=np.float32,
+    )
+
+
+def operator_diagnostics(
+    splits: Splits,
+    *,
+    operator_name: str = "none",
+) -> dict[str, Any]:
+    """Describe the fitted operator without exposing validation or test labels."""
+
+    if operator_name not in OPERATORS:
+        raise FeatureOperatorError(f"unknown operator {operator_name!r}")
+    if operator_name != "inverse_duplicate_frequency":
+        if operator_name == "smoothed_video_long_view_rate":
+            state = _fit_operator(operator_name, splits["train"])
+            return {
+                "smoothing_prior": state["prior"],
+                "training_global_long_view_rate": state["global_rate"],
+                "training_videos": len(state["impressions"]),
+                "uses_training_labels": True,
+                "uses_training_split_only": True,
+            }
+        return {}
+    counts = collections.Counter(_duplicate_key(row) for row in splits["train"])
+    duplicated = [count for count in counts.values() if count > 1]
+    weights = training_sample_weights(splits, operator_name=operator_name)
+    assert weights is not None
+    return {
+        "duplicate_key": "date,user,video,author,tab,duration",
+        "unique_training_interactions": len(counts),
+        "duplicate_groups": len(duplicated),
+        "rows_in_duplicate_groups": sum(duplicated),
+        "excess_duplicate_rows": sum(count - 1 for count in duplicated),
+        "effective_training_mass": float(weights.sum()),
+        "minimum_sample_weight": float(weights.min()) if weights.size else None,
+        "preserves_row_count": True,
+        "uses_training_split_only": True,
+    }
+
+
+def _fit_operator(operator_name: str, train: Sequence[Row]) -> dict[str, Any]:
+    if operator_name == "missing_duration_category":
+        return {}
+    if operator_name in HISTORY_OPERATOR_FIELDS:
+        return fit_history_feature(HISTORY_OPERATOR_FIELDS[operator_name], train)
+    if operator_name == "smoothed_video_long_view_rate":
+        impressions = collections.Counter(row[2] for row in train)
+        positives: collections.Counter[str] = collections.Counter()
+        for row in train:
+            positives[row[2]] += int(row[6])
+        total_positives = sum(positives.values())
+        global_rate = total_positives / len(train) if train else 0.0
+        state = {
+            "impressions": impressions,
+            "positives": positives,
+            "global_rate": global_rate,
+            "total_positives": total_positives,
+            "total_rows": len(train),
+            "prior": ENGAGEMENT_PRIOR,
+        }
+        rates = np.asarray(
+            [_smoothed_video_rate(row, state, training=True) for row in train],
+            dtype=np.float64,
+        )
+        edges = (
+            np.quantile(rates, np.linspace(0, 1, 11)[1:-1])
+            if rates.size
+            else np.asarray([], dtype=np.float64)
+        )
+        state["edges"] = edges
+        return state
+    raise FeatureOperatorError(f"operator {operator_name!r} cannot be encoded")
+
+
+def _operator_value(
+    operator_name: str,
+    row: Row,
+    state: Mapping[str, Any],
+    *,
+    training: bool = False,
+) -> str:
+    if operator_name == "missing_duration_category":
+        return "missing" if row[5] == 0 else "observed"
+    if operator_name in HISTORY_OPERATOR_FIELDS:
+        return history_feature_value(
+            HISTORY_OPERATOR_FIELDS[operator_name],
+            row,
+            state,
+            training=training,
+        )
+    if operator_name == "smoothed_video_long_view_rate":
+        rate = _smoothed_video_rate(row, state, training=training)
+        return str(int(np.searchsorted(state["edges"], rate)))
+    raise FeatureOperatorError(f"operator {operator_name!r} cannot transform rows")
+
+
+def _duplicate_key(row: Row) -> tuple[object, ...]:
+    """Return an exact feature tuple without consulting the outcome label."""
+
+    return tuple(row[:-1])
+
+
+def _smoothed_video_rate(
+    row: Row,
+    state: Mapping[str, Any],
+    *,
+    training: bool,
+) -> float:
+    """Return a train-fitted rate, leaving out the current training outcome."""
+
+    count = state["impressions"].get(row[2], 0)
+    positives = state["positives"].get(row[2], 0)
+    global_rate = state["global_rate"]
+    if training:
+        count -= 1
+        positives -= int(row[6])
+        remaining_rows = state["total_rows"] - 1
+        global_rate = (
+            (state["total_positives"] - int(row[6])) / remaining_rows
+            if remaining_rows
+            else 0.0
+        )
+    if count <= 0:
+        return float(global_rate)
+    return float(
+        (positives + state["prior"] * global_rate)
+        / (count + state["prior"])
+    )

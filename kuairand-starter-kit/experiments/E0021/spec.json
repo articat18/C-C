@@ -1,0 +1,38 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "The missing_duration_category operator was evaluated on seed 0 (E0020) and converged slightly below the baseline. We now proceed to test the next approved feature operator, video_popularity_bucket.",
+  "expected_effect": "Bucketing video popularity into categorical bins allows the model to capture non-linear frequency effects, which should mitigate popularity bias more effectively than linear scalar handling.",
+  "experiment_id": "E0021",
+  "hypothesis": "Applying the video_popularity_bucket operator to convert training-only impression counts into categorical features will improve the model's ability to rank items accurately across different popularity scales.",
+  "operator": "video_popularity_bucket",
+  "parameters": {
+    "bce_weight": 0.1,
+    "bpr_weight": 1.0,
+    "embedding_dim": 16,
+    "l2": 1e-05,
+    "learning_rate": 0.001,
+    "negatives_per_positive": 4,
+    "patience": 4,
+    "popularity_weight": 0.0
+  },
+  "provenance": {
+    "context_fingerprint": "c8c7a66d7e2b2b54798c70b5735b6751b0e679fa08811d4d7794b70857db2b1f",
+    "manual_interventions": 1,
+    "proposal_fingerprint": "a6f3a227e545d08ac7793b157aa821d4b3ac4829c40ed752bd9e4238bebc212a",
+    "source_model": "gemini-3.1-pro-preview-customtools",
+    "token_usage": {
+      "input_tokens": 17900,
+      "output_tokens": 537,
+      "thought_tokens": 2473,
+      "total_tokens": 20910
+    }
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "features",
+  "template": "bpr_hybrid"
+}

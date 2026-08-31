@@ -1,0 +1,22 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "experiment_id": "E0019",
+  "hypothesis": "Phase 3: changing learning_rate to 0.0005 improves validation ranking. Replication seed 2.",
+  "parameters": {
+    "bce_weight": 0.1,
+    "bpr_weight": 1.0,
+    "embedding_dim": 16,
+    "l2": 1e-05,
+    "learning_rate": 0.0005,
+    "negatives_per_positive": 4,
+    "patience": 4,
+    "popularity_weight": 0.0
+  },
+  "schema_version": 1,
+  "seed": 2,
+  "template": "bpr_hybrid"
+}

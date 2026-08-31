@@ -1,0 +1,38 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "Diagnostics show a material temporal drift with a validation positive rate delta of -0.023 compared to training. Previous scalar experiments attempting to calibrate this via BCE/BPR loss weights (E0013-E0015) destabilized training and inverted predictions.",
+  "expected_effect": "Incorporating the training-fitted date boundaries will explicitly provide the model with time-based features, allowing it to adapt to temporal distribution shifts and calibrate its rankings without destabilizing the BPR loss landscape.",
+  "experiment_id": "E0026",
+  "hypothesis": "Adding the date_period_bucket operator during the feature stage will capture temporal baseline shifts, improving validation ranking metrics relative to the static baseline.",
+  "operator": "date_period_bucket",
+  "parameters": {
+    "bce_weight": 0.1,
+    "bpr_weight": 1.0,
+    "embedding_dim": 16,
+    "l2": 1e-05,
+    "learning_rate": 0.001,
+    "negatives_per_positive": 4,
+    "patience": 4,
+    "popularity_weight": 0.0
+  },
+  "provenance": {
+    "context_fingerprint": "f29386be72c87581966a5b92b285b35d8a69200427c7531512dedf983d0cee78",
+    "manual_interventions": 0,
+    "proposal_fingerprint": "01366a4a294961e33a6df90f7685d1f74af6b63fd7a32aaaa91707771fea0ee7",
+    "source_model": "gemini-3.1-pro-preview-customtools",
+    "token_usage": {
+      "input_tokens": 10220,
+      "output_tokens": 293,
+      "thought_tokens": 1857,
+      "total_tokens": 12370
+    }
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "features",
+  "template": "bpr_hybrid"
+}

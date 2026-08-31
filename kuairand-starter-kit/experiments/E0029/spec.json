@@ -1,0 +1,38 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "The training data contains 6,482 authors for 7,538 videos, indicating users likely encounter the same creators repeatedly. Recommendation systems benefit strongly from explicit user-creator preference signals that might not be fully captured by independent user and video embeddings.",
+  "expected_effect": "Introducing a direct user-author interaction term will enable the model to explicitly learn and memorize user-specific preferences for individual content creators, boosting personalized ranking accuracy.",
+  "experiment_id": "E0029",
+  "hypothesis": "Adding the user_author_affinity operator during the features stage will capture persistent individual user preferences for specific authors, leading to a more accurate personalized ranking and an improved validation GAUC and nDCG.",
+  "operator": "user_author_affinity",
+  "parameters": {
+    "bce_weight": 0.1,
+    "bpr_weight": 1.0,
+    "embedding_dim": 16,
+    "l2": 1e-05,
+    "learning_rate": 0.001,
+    "negatives_per_positive": 4,
+    "patience": 4,
+    "popularity_weight": 0.0
+  },
+  "provenance": {
+    "context_fingerprint": "db47359345803148611561d2a90f6472d4106376e0459147fac9ebb2868e3b12",
+    "manual_interventions": 0,
+    "proposal_fingerprint": "829e33f7294a027cf4bf9707850758830b896128aa3c3f762ae2ad563b292bab",
+    "source_model": "gemini-3.1-pro-preview-customtools",
+    "token_usage": {
+      "input_tokens": 13668,
+      "output_tokens": 292,
+      "thought_tokens": 2182,
+      "total_tokens": 16142
+    }
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "features",
+  "template": "bpr_hybrid"
+}

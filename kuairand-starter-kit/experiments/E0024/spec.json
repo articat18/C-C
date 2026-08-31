@@ -1,0 +1,38 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "The training set contains 48,362 duplicate user-video rows, which can distort training by causing the model to overfit on heavily repeated interactions.",
+  "expected_effect": "Applying the inverse_duplicate_frequency operator will downweight these repeated interactions, reducing overfitting to frequent duplicates and improving generalization on the validation set.",
+  "experiment_id": "E0024",
+  "hypothesis": "Handling duplicate interactions via inverse frequency weighting during the cleaning stage will lead to a better calibrated model and improve validation ranking.",
+  "operator": "inverse_duplicate_frequency",
+  "parameters": {
+    "bce_weight": 0.1,
+    "bpr_weight": 1.0,
+    "embedding_dim": 16,
+    "l2": 1e-05,
+    "learning_rate": 0.001,
+    "negatives_per_positive": 4,
+    "patience": 4,
+    "popularity_weight": 0.0
+  },
+  "provenance": {
+    "context_fingerprint": "5e99154fc31b30c51937ddbf498f25da30c8556d7d5478d25528e8245e84d502",
+    "manual_interventions": 1,
+    "proposal_fingerprint": "c753fec9745156e10b674c2471da89a1983ac209fd723fc24ab014e31dfe57d7",
+    "source_model": "gemini-3.1-pro-preview-customtools",
+    "token_usage": {
+      "input_tokens": 19144,
+      "output_tokens": 534,
+      "thought_tokens": 1654,
+      "total_tokens": 21332
+    }
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "cleaning",
+  "template": "bpr_hybrid"
+}

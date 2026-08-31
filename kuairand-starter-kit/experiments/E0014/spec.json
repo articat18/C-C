@@ -1,0 +1,22 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "experiment_id": "E0014",
+  "hypothesis": "Setting popularity_weight to 0 and reducing bpr_weight relative to bce_weight will stabilize the model and prevent the anti-correlated predictions seen in the previous iteration.",
+  "parameters": {
+    "bce_weight": 0.8,
+    "bpr_weight": 0.2,
+    "embedding_dim": 64,
+    "l2": 1e-05,
+    "learning_rate": 0.001,
+    "negatives_per_positive": 4,
+    "patience": 5,
+    "popularity_weight": 0.0
+  },
+  "schema_version": 1,
+  "seed": 43,
+  "template": "bpr_hybrid"
+}

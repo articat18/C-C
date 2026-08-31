@@ -1,0 +1,26 @@
+{
+  "completed_at": "2026-08-30T12:52:20.161279+00:00",
+  "duration_seconds": 10.134821,
+  "error": "Cannot take a larger sample than population when replace is False",
+  "error_type": "ValueError",
+  "experiment_id": "E0023",
+  "hypothesis": "Handling duplicate interactions via inverse frequency weighting during the cleaning stage will lead to a better calibrated model and improve validation ranking.",
+  "operator": "inverse_duplicate_frequency",
+  "provenance": {
+    "context_fingerprint": "5e99154fc31b30c51937ddbf498f25da30c8556d7d5478d25528e8245e84d502",
+    "manual_interventions": 1,
+    "proposal_fingerprint": "c753fec9745156e10b674c2471da89a1983ac209fd723fc24ab014e31dfe57d7",
+    "source_model": "gemini-3.1-pro-preview-customtools",
+    "token_usage": {
+      "input_tokens": 19144,
+      "output_tokens": 534,
+      "thought_tokens": 1654,
+      "total_tokens": 21332
+    }
+  },
+  "spec_fingerprint": "57b9c3749ee5217a5c569b368c192e8c118b5effa2a888dade3c48a75c8da76c",
+  "stage": "cleaning",
+  "started_at": "2026-08-30T12:52:10.026543+00:00",
+  "status": "failed",
+  "template": "bpr_hybrid"
+}

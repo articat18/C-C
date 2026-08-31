@@ -1,0 +1,38 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "E0020 tested the missing_duration_category operator on seed 0 and scored 0.5989, which is slightly below the baseline. Given the known initialization variance observed in previous Phase 3 multi-seed tests, it is standard to evaluate operators across multiple seeds.",
+  "expected_effect": "Evaluate whether separating zero/missing duration rows from valid observed durations improves ranking performance consistently, mitigating the impact of seed variance on the evaluation of this data cleaning operator.",
+  "experiment_id": "E0022",
+  "hypothesis": "Replicating the missing_duration_category operator on seed 1 will confirm if the negative result on seed 0 was merely due to initialization noise, given that over 24,000 training rows contain zero duration.",
+  "operator": "missing_duration_category",
+  "parameters": {
+    "bce_weight": 0.1,
+    "bpr_weight": 1.0,
+    "embedding_dim": 16,
+    "l2": 1e-05,
+    "learning_rate": 0.001,
+    "negatives_per_positive": 4,
+    "patience": 4,
+    "popularity_weight": 0.0
+  },
+  "provenance": {
+    "context_fingerprint": "62087d9c1be0a8f6250a1959b669ae19a2ad28fa91e757a60a2b83b310db40f5",
+    "manual_interventions": 1,
+    "proposal_fingerprint": "d277242d63a2634888465c400e2b12a0542e5a65d164d17ac6d4eaf39d2357a7",
+    "source_model": "gemini-3.1-pro-preview-customtools",
+    "token_usage": {
+      "input_tokens": 9300,
+      "output_tokens": 309,
+      "thought_tokens": 1880,
+      "total_tokens": 11489
+    }
+  },
+  "schema_version": 2,
+  "seed": 1,
+  "stage": "cleaning",
+  "template": "bpr_hybrid"
+}

@@ -1,0 +1,12 @@
+{
+  "completed_at": "2026-08-30T05:49:29.095523+00:00",
+  "duration_seconds": 63.522049,
+  "error": "checkpoint already exists: /Users/moob/Code/auto-ml/kuairand-starter-kit/experiments/E0006/checkpoints/member-00.npz",
+  "error_type": "CheckpointError",
+  "experiment_id": "E0006",
+  "hypothesis": "Phase 3: changing learning_rate to 0.0005 improves validation ranking.",
+  "spec_fingerprint": "5304cda5e7c27c683720aca29d73cbeed19f7b4e29e3ace4f9381287d4eafb78",
+  "started_at": "2026-08-30T05:48:25.574930+00:00",
+  "status": "failed",
+  "template": "bpr_hybrid"
+}

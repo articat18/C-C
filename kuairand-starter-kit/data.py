@@ -9,24 +9,50 @@ SPLITS = {'train': (20220408, 20220421),
 # 5 个特征域。想加特征就往这里加 —— 这是学生最该动的地方之一。
 FIELDS = ['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']
 
-def load(data_dir):
-    """读日志 + 视频侧特征，返回按划分切好的 dict。"""
+def load(data_dir, split_names=None):
+    """读日志 + 视频侧特征，返回请求的官方划分。
+
+    ``split_names`` 默认为全部划分。验证阶段可显式只请求 train/valid，
+    从而不读取或物化 test 标签。
+    """
+    requested = tuple(SPLITS) if split_names is None else tuple(split_names)
+    unknown = sorted(set(requested) - set(SPLITS))
+    if unknown:
+        raise ValueError(f"unknown splits: {', '.join(unknown)}")
+    if not requested:
+        raise ValueError("at least one split must be requested")
+
     vid2author = {}
     with open(os.path.join(data_dir, 'video_features_basic_pure.csv')) as fh:
         for r in csv.DictReader(fh):
             vid2author[r['video_id']] = r['author_id']
 
-    rows = []
+    out = {name: [] for name in requested}
     for f in ('log_standard_4_08_to_4_21_pure.csv', 'log_standard_4_22_to_5_08_pure.csv'):
         with open(os.path.join(data_dir, f)) as fh:
             for r in csv.DictReader(fh):
-                rows.append((int(r['date']), r['user_id'], r['video_id'],
-                             vid2author.get(r['video_id'], 'UNK'), r['tab'],
-                             float(r['duration_ms']), 1 if r[LABEL] != '0' else 0))
-
-    out = {}
-    for name, (lo, hi) in SPLITS.items():
-        out[name] = [x for x in rows if lo <= x[0] <= hi]
+                date = int(r['date'])
+                split = next(
+                    (
+                        name
+                        for name in requested
+                        if SPLITS[name][0] <= date <= SPLITS[name][1]
+                    ),
+                    None,
+                )
+                if split is None:
+                    continue
+                out[split].append(
+                    (
+                        date,
+                        r['user_id'],
+                        r['video_id'],
+                        vid2author.get(r['video_id'], 'UNK'),
+                        r['tab'],
+                        float(r['duration_ms']),
+                        1 if r[LABEL] != '0' else 0,
+                    )
+                )
     return out
 
 def _bucket_edges(durations, n=10):
