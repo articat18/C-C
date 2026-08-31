@@ -332,7 +332,7 @@ def _validate_provenance(value: Any) -> dict[str, Any] | None:
         raise SpecificationError("provenance must be a JSON object")
     allowed = {
         "proposal_fingerprint", "context_fingerprint", "source_model",
-        "token_usage", "manual_interventions", "research_sources",
+        "token_usage", "manual_interventions", "research_sources", "recovery_of",
     }
     unknown = sorted(set(value) - allowed)
     if unknown:
@@ -381,6 +381,11 @@ def _validate_provenance(value: Any) -> dict[str, Any] | None:
         raise SpecificationError(
             "provenance.manual_interventions must be a non-negative integer"
         )
+    recovery_of = value.get("recovery_of")
+    if recovery_of is not None and (
+        not isinstance(recovery_of, str) or not EXPERIMENT_ID.fullmatch(recovery_of)
+    ):
+        raise SpecificationError("provenance.recovery_of must be an experiment ID or null")
     sources = value.get("research_sources", [])
     if not isinstance(sources, list):
         raise SpecificationError("provenance.research_sources must be an array")
@@ -411,4 +416,5 @@ def _validate_provenance(value: Any) -> dict[str, Any] | None:
         "token_usage": normalized_usage,
         "manual_interventions": interventions,
         "research_sources": normalized_sources,
+        **({"recovery_of": recovery_of} if recovery_of is not None else {}),
     }

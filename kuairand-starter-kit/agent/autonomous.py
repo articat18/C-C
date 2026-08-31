@@ -54,9 +54,11 @@ class AutonomousResearchAgent:
                     "Autonomous Phase 4 agent: select a new approved direction after convergence."
                 )
             proposal_recovery = None
-            try:
-                proposal = self.client.propose({**context, "status": status})
-            except (RuntimeError, ValueError) as exc:
+            proposal, proposal_recovery = self._propose_with_recovery(
+                {**context, "status": status}
+            )
+            if proposal is None:
+                exc = proposal_recovery.pop("exception")
                 proposal = _fallback_proposal(context)
                 if proposal is None:
                     decision = {
@@ -64,10 +66,10 @@ class AutonomousResearchAgent:
                         "status": "blocked",
                         "reason": "invalid_or_unavailable_proposal",
                         "recovery": {
-                            "error_type": type(exc).__name__,
-                            "error": str(exc),
+                            "error_type": proposal_recovery["error_type"],
+                            "error": proposal_recovery["error"],
                             "action": "route_to_review",
-                            "retry_count": 1,
+                            "retry_count": proposal_recovery["retry_count"],
                         },
                         "agent_wall_seconds": round(time.monotonic() - step_started, 6),
                     }
@@ -75,10 +77,10 @@ class AutonomousResearchAgent:
                     _append_decision(decision)
                     break
                 proposal_recovery = {
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
+                    "error_type": proposal_recovery["error_type"],
+                    "error": proposal_recovery["error"],
                     "action": "deterministic_fallback",
-                    "retry_count": 1,
+                    "retry_count": proposal_recovery["retry_count"],
                     "selected_operator": proposal.operator,
                 }
             decision: dict[str, Any] = {
@@ -141,6 +143,28 @@ class AutonomousResearchAgent:
                 break
             context = {**build_agent_context(), "previous_decision": decision}
         return decisions
+
+    def _propose_with_recovery(
+        self, context: dict[str, Any]
+    ) -> tuple[ExperimentProposal | None, dict[str, Any] | None]:
+        """Bound transient proposal-service outages before deterministic fallback."""
+        for attempt, delay in enumerate((0, 5, 30, 120), start=0):
+            if delay:
+                time.sleep(delay)
+            try:
+                return self.client.propose(context), None
+            except (RuntimeError, ValueError) as exc:
+                transient = _is_transient_proposal_error(exc)
+                if transient and attempt < 3:
+                    continue
+                return None, {
+                    "exception": exc,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "retry_count": attempt,
+                    "failure_class": "transient_proposal_service" if transient else "invalid_proposal",
+                }
+        raise AssertionError("proposal retry loop must return")
 
 
 def _reflect(execution: dict[str, Any]) -> dict[str, Any]:
@@ -229,6 +253,14 @@ def _fallback_proposal(context: dict[str, Any]) -> ExperimentProposal | None:
             research_source_ids=(source_id,),
         )
     return None
+
+
+def _is_transient_proposal_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return any(token in message for token in (
+        "timeout", "timed out", "connection", "network", "temporar",
+        "unavailable", "429", "rate limit", "500", "502", "503", "504",
+    ))
 
 
 def _append_decision(decision: dict[str, Any]) -> None:

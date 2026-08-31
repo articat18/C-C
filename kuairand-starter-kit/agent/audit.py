@@ -22,6 +22,7 @@ def build_audit_summary(
 ) -> dict[str, Any]:
     records = list((registry or ExperimentRegistry()).records())
     decisions = _jsonl(resolve_editable_path(decisions_path))
+    supervisor_events = _jsonl(resolve_editable_path("runs/supervisor-events.jsonl"))
     experiments = []
     token_usage: dict[str, int] = {}
     manual_interventions = 0
@@ -101,6 +102,7 @@ def build_audit_summary(
             for revision, diff_hash in sorted(revisions.items())
         ],
         "recoveries": recoveries + explicit_recoveries,
+        "supervisor_events": supervisor_events,
         "reflections": [
             decision["reflection"]
             for decision in decisions

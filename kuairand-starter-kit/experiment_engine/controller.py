@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import signal
 import time
+import uuid
 from typing import Any, Iterator, Mapping
 
 from experiment_engine.checkpoints import _atomic_json_write
@@ -55,11 +56,7 @@ class ExperimentController:
             raise ControllerError(f"experiment has already been executed: {run_directory}")
         run_directory.mkdir(parents=True, exist_ok=True)
         lock_path = run_directory / ".run.lock"
-        try:
-            descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.close(descriptor)
-        except FileExistsError as exc:
-            raise ControllerError(f"experiment is already running: {spec.experiment_id}") from exc
+        _create_run_lock(lock_path, experiment_id=spec.experiment_id)
         spec_path = run_directory / "spec.json"
         try:
             if spec_path.exists():
@@ -460,6 +457,32 @@ class ExperimentController:
             "evidence_threshold": evidence_threshold,
             "decision": "promising" if improvement >= evidence_threshold else "reject",
         }
+
+
+def _create_run_lock(lock_path: Path, *, experiment_id: str) -> None:
+    """Create an exclusive, inspectable execution lease.
+
+    A supervisor can distinguish an active owner from a lock left behind by a
+    killed process; the controller itself never removes another process's lock.
+    """
+    payload = {
+        "schema_version": 1,
+        "experiment_id": experiment_id,
+        "pid": os.getpid(),
+        "run_id": uuid.uuid4().hex,
+        "started_at": _utc_now(),
+        "heartbeat_at": _utc_now(),
+    }
+    try:
+        descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError as exc:
+        raise ControllerError(f"experiment is already running: {experiment_id}") from exc
+    try:
+        encoded = json.dumps(payload, sort_keys=True).encode("utf-8")
+        os.write(descriptor, encoded)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def _has_converged(scores: list[float]) -> bool:

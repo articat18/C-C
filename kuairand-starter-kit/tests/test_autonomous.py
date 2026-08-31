@@ -102,6 +102,23 @@ class AutonomousAgentTests(unittest.TestCase):
         self.assertEqual(decisions[0]["proposal"]["operator"], "date_period_bucket")
         orchestrator.run_proposal.assert_called_once()
 
+    def test_transient_proposal_service_retries_with_bounded_backoff(self):
+        orchestrator = mock.Mock()
+        orchestrator.controller.status.return_value = {"converged": False}
+        client = mock.Mock()
+        client.propose.side_effect = [
+            RuntimeError("503 service unavailable"),
+            RuntimeError("temporary network timeout"),
+            self.proposal,
+        ]
+        agent = AutonomousResearchAgent(orchestrator=orchestrator, client=client)
+        with mock.patch("agent.autonomous.time.sleep") as sleep:
+            proposal, recovery = agent._propose_with_recovery({})
+        self.assertEqual(proposal, self.proposal)
+        self.assertIsNone(recovery)
+        self.assertEqual(client.propose.call_count, 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [5, 30])
+
 
 if __name__ == "__main__":
     unittest.main()

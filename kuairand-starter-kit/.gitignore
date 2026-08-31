@@ -5,3 +5,4 @@ __pycache__/
 runs/
 experiments/*/checkpoints/
 experiments/*/artifacts/
+campaigns/

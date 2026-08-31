@@ -70,6 +70,7 @@ class ResearchOrchestrator:
         *,
         verbose: bool = True,
         manual_interventions: int = 0,
+        recovery_of: str | None = None,
     ) -> dict[str, Any]:
         """Materialize one validated proposal and execute it through the controller."""
         provenance = dict(proposal.provenance)
@@ -77,6 +78,8 @@ class ResearchOrchestrator:
             provenance["research_sources"] = validate_source_ids(proposal.research_source_ids)
         provenance["proposal_fingerprint"] = proposal_fingerprint(proposal)
         provenance["manual_interventions"] = manual_interventions
+        if recovery_of is not None:
+            provenance["recovery_of"] = recovery_of
         spec, path = self.controller.create(
             proposal.template,
             proposal.hypothesis,
