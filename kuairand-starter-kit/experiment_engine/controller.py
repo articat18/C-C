@@ -404,7 +404,7 @@ class ExperimentController:
                 f"{spec.control_experiment_id}"
             )
         model_comparison = (
-            spec.template in {"sequence_mlp", "sequence_ensemble"}
+            spec.template in {"sequence_mlp", "sequence_ensemble", "causal_attention"}
             and control.get("template") == "pointwise_fm"
             and spec.stage == "model"
             and control.get("operator", "none") == "none"

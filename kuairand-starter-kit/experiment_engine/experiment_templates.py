@@ -150,6 +150,22 @@ TEMPLATES: dict[str, ExperimentTemplate] = {
         ensemble_members=3,
         objective="sequence_mlp",
     ),
+    "causal_attention": ExperimentTemplate(
+        name="causal_attention",
+        description=(
+            "Causal fixed-length self-attention over prior positive videos, with "
+            "history fit from earlier training dates only."
+        ),
+        parameters={
+            "embedding_dim": ParameterRule(int, 16, minimum=4, maximum=64),
+            "hidden_dim": ParameterRule(int, 32, choices=(16, 32, 64)),
+            "learning_rate": ParameterRule(float, 0.001, minimum=1e-6, maximum=0.1),
+            "l2": ParameterRule(float, 1e-6, minimum=0.0, maximum=0.1),
+            "patience": ParameterRule(int, 4, minimum=1, maximum=20),
+            "batch_size": ParameterRule(int, 8192, choices=(2048, 4096, 8192, 16384)),
+        },
+        objective="causal_attention",
+    ),
     "pointwise_ensemble": ExperimentTemplate(
         name="pointwise_ensemble",
         description=(

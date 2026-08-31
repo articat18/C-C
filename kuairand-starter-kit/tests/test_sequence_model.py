@@ -2,8 +2,8 @@ import unittest
 
 import numpy as np
 
-from candidates.sequence_features import NONE_TOKEN, _training_contexts
-from candidates.sequence_model import CausalSequenceMLP
+from candidates.sequence_features import ATTENTION_HISTORY_FIELDS, NONE_TOKEN, _training_contexts, _training_history_windows
+from candidates.sequence_model import CausalAttentionRanker, CausalSequenceMLP
 from experiment_engine.experiment_templates import get_template
 
 
@@ -18,6 +18,20 @@ class SequenceFeatureTests(unittest.TestCase):
         self.assertEqual(contexts[:2], [NONE_TOKEN, NONE_TOKEN])
         self.assertEqual(contexts[2], "v2")
         self.assertEqual(final_history["u"], "v2")
+
+    def test_attention_history_never_uses_same_date_outcomes(self):
+        rows = [
+            (1, "u", "v1", "a", "t", 1.0, 1),
+            (1, "u", "v2", "a", "t", 1.0, 1),
+            (2, "u", "v3", "a", "t", 1.0, 0),
+        ]
+        contexts, final_history = _training_history_windows(
+            rows, length=len(ATTENTION_HISTORY_FIELDS)
+        )
+        self.assertEqual(contexts[0], (NONE_TOKEN,) * len(ATTENTION_HISTORY_FIELDS))
+        self.assertEqual(contexts[1], (NONE_TOKEN,) * len(ATTENTION_HISTORY_FIELDS))
+        self.assertEqual(contexts[2][-2:], ("v1", "v2"))
+        self.assertEqual(final_history["u"][-2:], ("v1", "v2"))
 
 
 class SequenceModelTests(unittest.TestCase):
@@ -37,6 +51,31 @@ class SequenceModelTests(unittest.TestCase):
         state = {name: value.copy() for name, value in model.checkpoint_state().items()}
         restored = CausalSequenceMLP(
             12, embedding_dim=4, hidden_dim=4, learning_rate=0.01, l2=1e-6, seed=99
+        )
+        restored.restore(state)
+        np.testing.assert_allclose(restored.predict(X), after)
+
+    def test_attention_model_trains_and_round_trips_checkpoint_state(self):
+        model = CausalAttentionRanker(
+            29, history_fields=8, embedding_dim=4, hidden_dim=4,
+            learning_rate=0.01, l2=1e-6, seed=7,
+        )
+        # Five official fields followed by eight position-specific history slots.
+        X = np.asarray([
+            [0, 1, 2, 3, 4, 5, 8, 11, 14, 17, 20, 23, 26],
+            [0, 2, 2, 3, 4, 5, 8, 11, 14, 17, 20, 23, 27],
+            [1, 1, 2, 3, 4, 5, 8, 11, 14, 17, 20, 23, 26],
+            [1, 2, 2, 3, 4, 5, 8, 11, 14, 17, 20, 23, 27],
+        ], dtype=np.int32)
+        y = np.asarray([1, 0, 1, 0], dtype=np.float32)
+        before = model.predict(X)
+        model.step(X, y)
+        after = model.predict(X)
+        self.assertFalse(np.allclose(before, after))
+        state = {name: value.copy() for name, value in model.checkpoint_state().items()}
+        restored = CausalAttentionRanker(
+            29, history_fields=8, embedding_dim=4, hidden_dim=4,
+            learning_rate=0.01, l2=1e-6, seed=99,
         )
         restored.restore(state)
         np.testing.assert_allclose(restored.predict(X), after)

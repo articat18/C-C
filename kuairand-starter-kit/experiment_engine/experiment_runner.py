@@ -19,8 +19,8 @@ from candidates.feature_pipeline import (
     operator_diagnostics,
     training_sample_weights,
 )
-from candidates.sequence_features import HISTORY_FIELD, encode_sequence_splits
-from candidates.sequence_model import fit_sequence_mlp
+from candidates.sequence_features import ATTENTION_HISTORY_FIELDS, HISTORY_FIELD, encode_attention_sequence_splits, encode_sequence_splits
+from candidates.sequence_model import fit_causal_attention, fit_sequence_mlp
 from data import load
 from evaluate import evaluate
 from experiment_engine.checkpoints import CheckpointManager
@@ -81,6 +81,8 @@ def run_experiment(
     )
     if template.objective == "sequence_mlp":
         encode_fn = encode_sequence_splits
+    elif template.objective == "causal_attention":
+        encode_fn = encode_attention_sequence_splits
     sample_weights = training_sample_weights(splits, operator_name=spec.operator)
     member_predictions: list[np.ndarray] = []
     checkpoints = []
@@ -110,6 +112,20 @@ def run_experiment(
         }
         if template.objective == "sequence_mlp":
             model, encoded = fit_sequence_mlp(
+                splits,
+                embedding_dim=int(parameters["embedding_dim"]),
+                hidden_dim=int(parameters["hidden_dim"]),
+                learning_rate=float(parameters["learning_rate"]),
+                l2=float(parameters["l2"]),
+                epochs=spec.budget.max_epochs,
+                patience=int(parameters["patience"]),
+                batch_size=int(parameters["batch_size"]),
+                seed=member_seed,
+                encode_fn=encode_fn,
+                verbose=verbose,
+            )
+        elif template.objective == "causal_attention":
+            model, encoded = fit_causal_attention(
                 splits,
                 embedding_dim=int(parameters["embedding_dim"]),
                 hidden_dim=int(parameters["hidden_dim"]),
@@ -172,7 +188,11 @@ def run_experiment(
                     "encoded_fields": (
                         list(encoded_field_names(spec.operator)) + [HISTORY_FIELD]
                         if template.objective == "sequence_mlp"
-                        else list(encoded_field_names(spec.operator))
+                        else (
+                            list(encoded_field_names(spec.operator)) + list(ATTENTION_HISTORY_FIELDS)
+                            if template.objective == "causal_attention"
+                            else list(encoded_field_names(spec.operator))
+                        )
                     ),
                     "member": member,
                     "seed": member_seed,
@@ -209,7 +229,11 @@ def run_experiment(
         "encoded_fields": (
             list(encoded_field_names(spec.operator)) + [HISTORY_FIELD]
             if template.objective == "sequence_mlp"
-            else list(encoded_field_names(spec.operator))
+            else (
+                list(encoded_field_names(spec.operator)) + list(ATTENTION_HISTORY_FIELDS)
+                if template.objective == "causal_attention"
+                else list(encoded_field_names(spec.operator))
+            )
         ),
         "operator_diagnostics": operator_diagnostics(
             splits, operator_name=spec.operator

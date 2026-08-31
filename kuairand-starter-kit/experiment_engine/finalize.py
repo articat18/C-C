@@ -14,8 +14,8 @@ import numpy as np
 
 import baseline as baseline_models
 from candidates.feature_pipeline import encode_candidate_splits
-from candidates.sequence_features import encode_sequence_splits
-from candidates.sequence_model import CausalSequenceMLP
+from candidates.sequence_features import ATTENTION_HISTORY_FIELDS, encode_attention_sequence_splits, encode_sequence_splits
+from candidates.sequence_model import CausalAttentionRanker, CausalSequenceMLP
 from data import load
 from evaluate import evaluate
 from submit import write_submission
@@ -68,7 +68,11 @@ def finalize_experiment(
     encoded, dimension = (
         encode_sequence_splits(splits)
         if get_template(spec.template).objective == "sequence_mlp"
-        else encode_candidate_splits(splits, operator_name=spec.operator)
+        else (
+            encode_attention_sequence_splits(splits)
+            if get_template(spec.template).objective == "causal_attention"
+            else encode_candidate_splits(splits, operator_name=spec.operator)
+        )
     )
     X_test, labels_test, users_test = encoded["test"]
     template = get_template(spec.template)
@@ -81,15 +85,22 @@ def finalize_experiment(
             raise FinalizationError(
                 f"checkpoint member {member} does not match the approved specification"
             )
-        if template.objective == "sequence_mlp":
-            model = CausalSequenceMLP(
-                dimension,
-                embedding_dim=int(spec.parameters["embedding_dim"]),
-                hidden_dim=int(spec.parameters["hidden_dim"]),
-                learning_rate=float(spec.parameters["learning_rate"]),
-                l2=float(spec.parameters["l2"]),
-                seed=spec.seed + member,
-            )
+        if template.objective in {"sequence_mlp", "causal_attention"}:
+            if template.objective == "sequence_mlp":
+                model = CausalSequenceMLP(
+                    dimension, embedding_dim=int(spec.parameters["embedding_dim"]),
+                    hidden_dim=int(spec.parameters["hidden_dim"]),
+                    learning_rate=float(spec.parameters["learning_rate"]),
+                    l2=float(spec.parameters["l2"]), seed=spec.seed + member,
+                )
+            else:
+                model = CausalAttentionRanker(
+                    dimension, history_fields=len(ATTENTION_HISTORY_FIELDS),
+                    embedding_dim=int(spec.parameters["embedding_dim"]),
+                    hidden_dim=int(spec.parameters["hidden_dim"]),
+                    learning_rate=float(spec.parameters["learning_rate"]),
+                    l2=float(spec.parameters["l2"]), seed=spec.seed + member,
+                )
             expected = model.checkpoint_state()
             if set(state) != set(expected) or any(state[name].shape != expected[name].shape for name in expected):
                 raise FinalizationError(f"checkpoint member {member} has incompatible shapes")
