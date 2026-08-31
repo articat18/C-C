@@ -1,0 +1,259 @@
+{
+  "checkpoints": [
+    {
+      "arrays": "campaigns/phase8/experiments/E0016/checkpoints/member-00.npz",
+      "metadata": "campaigns/phase8/experiments/E0016/checkpoints/member-00.json"
+    },
+    {
+      "arrays": "campaigns/phase8/experiments/E0016/checkpoints/member-01.npz",
+      "metadata": "campaigns/phase8/experiments/E0016/checkpoints/member-01.json"
+    },
+    {
+      "arrays": "campaigns/phase8/experiments/E0016/checkpoints/member-02.npz",
+      "metadata": "campaigns/phase8/experiments/E0016/checkpoints/member-02.json"
+    }
+  ],
+  "comparison": {
+    "candidate": 0.6041704416275024,
+    "decision": "reject_or_refine",
+    "epsilon": 0.002,
+    "improvement": -0.0004105567932128906,
+    "previous_best": 0.6045809984207153,
+    "reference": "E0008"
+  },
+  "completed_at": "2026-08-31T14:56:35.930982+00:00",
+  "diagnostics": {
+    "baseline_comparison": {
+      "metrics": {
+        "GAUC": {
+          "baseline": 0.6674,
+          "candidate": 0.6703377366065979,
+          "delta": 0.002937736606597907
+        },
+        "nDCG@5": {
+          "baseline": 0.5357,
+          "candidate": 0.5380030870437622,
+          "delta": 0.002303087043762253
+        },
+        "primary": {
+          "baseline": 0.6016,
+          "candidate": 0.6041704416275024,
+          "delta": 0.0025704416275024178
+        }
+      },
+      "split": "valid"
+    },
+    "validation_subgroups": {
+      "date_period/early": {
+        "GAUC": 0.6656595230170047,
+        "nDCG@5": 0.49904506824739997,
+        "primary": 0.5823522956322024,
+        "rows": 67168,
+        "users": 18488
+      },
+      "date_period/late": {
+        "GAUC": 0.6646335114711953,
+        "nDCG@5": 0.4837524510081083,
+        "primary": 0.5741929812396518,
+        "rows": 57741,
+        "users": 17075
+      },
+      "duration/long_15001+": {
+        "GAUC": 0.6589368665355253,
+        "nDCG@5": 0.5285741816679655,
+        "primary": 0.5937555241017454,
+        "rows": 106475,
+        "users": 21730
+      },
+      "duration/medium_5001-15000": {
+        "GAUC": 0.7053240939958206,
+        "nDCG@5": 0.40216684984845874,
+        "primary": 0.5537454719221397,
+        "rows": 16319,
+        "users": 9213
+      },
+      "duration/missing_zero": {
+        "GAUC": 0.6114341085271318,
+        "nDCG@5": 0.08651853522038168,
+        "primary": 0.3489763218737567,
+        "rows": 2107,
+        "users": 1736
+      },
+      "duration/short_0-5000": {
+        "GAUC": 0.5,
+        "nDCG@5": 0.375,
+        "primary": 0.4375,
+        "rows": 8,
+        "users": 8
+      },
+      "item_popularity/01-05": {
+        "GAUC": 0.6666666666666666,
+        "nDCG@5": 0.18320502930605814,
+        "primary": 0.4249358479863624,
+        "rows": 376,
+        "users": 316
+      },
+      "item_popularity/06-20": {
+        "GAUC": 0.6971503562054744,
+        "nDCG@5": 0.24715654793767447,
+        "primary": 0.47215345207157444,
+        "rows": 3360,
+        "users": 2598
+      },
+      "item_popularity/101+": {
+        "GAUC": 0.6653237634295749,
+        "nDCG@5": 0.5365559716358883,
+        "primary": 0.6009398675327315,
+        "rows": 102391,
+        "users": 21413
+      },
+      "item_popularity/21-100": {
+        "GAUC": 0.6656005111541178,
+        "nDCG@5": 0.3390203781329739,
+        "primary": 0.5023104446435458,
+        "rows": 18782,
+        "users": 10017
+      },
+      "user_activity/01-05": {
+        "GAUC": 0.6761273079195984,
+        "nDCG@5": 0.5323294258963833,
+        "primary": 0.6042283669079909,
+        "rows": 6305,
+        "users": 1926
+      },
+      "user_activity/06-20": {
+        "GAUC": 0.6596717159967556,
+        "nDCG@5": 0.5412276496058591,
+        "primary": 0.6004496828013073,
+        "rows": 17850,
+        "users": 5146
+      },
+      "user_activity/101+": {
+        "GAUC": 0.6783944000634722,
+        "nDCG@5": 0.4751122641416308,
+        "primary": 0.5767533321025515,
+        "rows": 25342,
+        "users": 2371
+      },
+      "user_activity/21-100": {
+        "GAUC": 0.6702711087049075,
+        "nDCG@5": 0.5490926498170644,
+        "primary": 0.6096818792609859,
+        "rows": 75412,
+        "users": 12934
+      }
+    }
+  },
+  "duration_seconds": 68.891352,
+  "encoded_fields": [
+    "user_id",
+    "video_id",
+    "author_id",
+    "tab",
+    "dur_bucket",
+    "prior_positive_video"
+  ],
+  "environment": {
+    "code_diff_hash": "b9393ad780ad10a464d3616e2f521154740cc8d85f845d4cfdd0f5abd970d102",
+    "git_revision": "50f5a1ae45685e1dc1d8eb14766d35af0dbfb604",
+    "numpy": "2.2.6",
+    "python": "3.14.0"
+  },
+  "experiment_id": "E0016",
+  "global_comparison": {
+    "candidate": 0.6041704416275024,
+    "decision": "reject_or_refine",
+    "epsilon": 0.002,
+    "improvement": -0.0004105567932128906,
+    "previous_best": 0.6045809984207153,
+    "reference": "E0008"
+  },
+  "matched_comparison": {
+    "candidate": 0.6041704416275024,
+    "control": 0.6014695167541504,
+    "decision": "promising",
+    "evidence_threshold": 0.0005,
+    "improvement": 0.0027009248733520508,
+    "reference": "E0001"
+  },
+  "member_metrics": [
+    {
+      "GAUC": 0.6704678535461426,
+      "nDCG@5": 0.5378091931343079,
+      "primary": 0.6041384935379028,
+      "rows": 124909,
+      "users": 22377
+    },
+    {
+      "GAUC": 0.6690227389335632,
+      "nDCG@5": 0.5374853610992432,
+      "primary": 0.6032540798187256,
+      "rows": 124909,
+      "users": 22377
+    },
+    {
+      "GAUC": 0.6707202792167664,
+      "nDCG@5": 0.5374805331230164,
+      "primary": 0.6041004061698914,
+      "rows": 124909,
+      "users": 22377
+    }
+  ],
+  "metrics": {
+    "valid": {
+      "GAUC": 0.6703377366065979,
+      "nDCG@5": 0.5380030870437622,
+      "primary": 0.6041704416275024,
+      "rows": 124909,
+      "users": 22377
+    }
+  },
+  "objective": "sequence_mlp",
+  "objective_diagnostics": {},
+  "operator": "none",
+  "operator_diagnostics": {},
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "hidden_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "provenance": {
+    "context_fingerprint": "67c96600cb91226386297b58a0dc9dd09f15e038c75dd82ea8f6929fe6278817",
+    "manual_interventions": 0,
+    "proposal_fingerprint": "fc055d5b24b35ce001d52edca9cd604de3b06380a261e07ddcf5fde846c5d5d6",
+    "research_sources": [
+      {
+        "content_sha256": "f547f2b843481b325548d90ae61930f89241657d61b31dcf0ebe10fd09754fc9",
+        "source_id": "S-f547f2b843481b32",
+        "summary": "SASRec motivates causal self-attention over user interaction histories for sequential recommendation.",
+        "title": "Self-Attentive Sequential Recommendation",
+        "url": "https://arxiv.org/abs/1808.09781"
+      }
+    ],
+    "source_model": "gemini-3.1-pro-preview-customtools",
+    "token_usage": {
+      "input_tokens": 17631,
+      "output_tokens": 630,
+      "thought_tokens": 10033,
+      "total_tokens": 28294
+    }
+  },
+  "resources": {
+    "accelerator": "cpu_numpy",
+    "gpu_hours": 0.0,
+    "training_seconds": 68.891352
+  },
+  "rows": {
+    "train": 1141112,
+    "valid": 124909
+  },
+  "seed": 0,
+  "selection_split": "valid",
+  "spec_fingerprint": "0ada452904f56e71d5fecec50c4bc9d0d3f6dc140ec472f40dbb0f95017e6b5e",
+  "stage": "model",
+  "status": "success",
+  "template": "sequence_ensemble"
+}

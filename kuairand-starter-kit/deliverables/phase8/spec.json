@@ -1,0 +1,46 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "control_experiment_id": "E0001",
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "With the causal attention model converging, exploring the sequence ensemble architecture provides a new approved direction. We evaluate it using a restricted hidden dimensionality of 16, which previously proved optimal for generalization on sparse sequential histories.",
+  "expected_effect": "The sequence ensemble will improve GAUC and nDCG over the pointwise baseline by integrating temporal patterns, with the reduced hidden capacity acting as implicit regularization to prevent overfitting.",
+  "experiment_id": "E0016",
+  "hypothesis": "Deploying a sequence ensemble architecture with a constrained hidden_dim of 16 will outperform the baseline by robustly capturing sequential user preferences without overfitting.",
+  "operator": "none",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "hidden_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "provenance": {
+    "context_fingerprint": "67c96600cb91226386297b58a0dc9dd09f15e038c75dd82ea8f6929fe6278817",
+    "manual_interventions": 0,
+    "proposal_fingerprint": "fc055d5b24b35ce001d52edca9cd604de3b06380a261e07ddcf5fde846c5d5d6",
+    "research_sources": [
+      {
+        "content_sha256": "f547f2b843481b325548d90ae61930f89241657d61b31dcf0ebe10fd09754fc9",
+        "source_id": "S-f547f2b843481b32",
+        "summary": "SASRec motivates causal self-attention over user interaction histories for sequential recommendation.",
+        "title": "Self-Attentive Sequential Recommendation",
+        "url": "https://arxiv.org/abs/1808.09781"
+      }
+    ],
+    "source_model": "gemini-3.1-pro-preview-customtools",
+    "token_usage": {
+      "input_tokens": 17631,
+      "output_tokens": 630,
+      "thought_tokens": 10033,
+      "total_tokens": 28294
+    }
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "model",
+  "template": "sequence_ensemble"
+}
