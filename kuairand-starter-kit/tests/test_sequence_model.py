@@ -4,6 +4,7 @@ import numpy as np
 
 from candidates.sequence_features import NONE_TOKEN, _training_contexts
 from candidates.sequence_model import CausalSequenceMLP
+from experiment_engine.experiment_templates import get_template
 
 
 class SequenceFeatureTests(unittest.TestCase):
@@ -20,6 +21,9 @@ class SequenceFeatureTests(unittest.TestCase):
 
 
 class SequenceModelTests(unittest.TestCase):
+    def test_sequence_ensemble_uses_three_members(self):
+        self.assertEqual(get_template("sequence_ensemble").ensemble_members, 3)
+
     def test_model_trains_and_round_trips_checkpoint_state(self):
         model = CausalSequenceMLP(
             12, embedding_dim=4, hidden_dim=4, learning_rate=0.01, l2=1e-6, seed=7
