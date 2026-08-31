@@ -41,6 +41,7 @@ PARAMETER_STAGES = {
     "bpr_weight": "loss",
     "bce_weight": "loss",
     "embedding_dim": "model",
+    "hidden_dim": "model",
     "popularity_weight": "model",
     "learning_rate": "training",
     "l2": "training",

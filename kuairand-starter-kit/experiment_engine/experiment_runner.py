@@ -19,6 +19,8 @@ from candidates.feature_pipeline import (
     operator_diagnostics,
     training_sample_weights,
 )
+from candidates.sequence_features import HISTORY_FIELD, encode_sequence_splits
+from candidates.sequence_model import fit_sequence_mlp
 from data import load
 from evaluate import evaluate
 from experiment_engine.checkpoints import CheckpointManager
@@ -77,6 +79,8 @@ def run_experiment(
     encode_fn = lambda candidate_splits: encode_candidate_splits(
         candidate_splits, operator_name=spec.operator
     )
+    if template.objective == "sequence_mlp":
+        encode_fn = encode_sequence_splits
     sample_weights = training_sample_weights(splits, operator_name=spec.operator)
     member_predictions: list[np.ndarray] = []
     checkpoints = []
@@ -104,7 +108,21 @@ def run_experiment(
             "encode_fn": encode_fn,
             "train_sample_weights": sample_weights,
         }
-        if template.objective == "pointwise_bce":
+        if template.objective == "sequence_mlp":
+            model, encoded = fit_sequence_mlp(
+                splits,
+                embedding_dim=int(parameters["embedding_dim"]),
+                hidden_dim=int(parameters["hidden_dim"]),
+                learning_rate=float(parameters["learning_rate"]),
+                l2=float(parameters["l2"]),
+                epochs=spec.budget.max_epochs,
+                patience=int(parameters["patience"]),
+                batch_size=int(parameters["batch_size"]),
+                seed=member_seed,
+                encode_fn=encode_fn,
+                verbose=verbose,
+            )
+        elif template.objective == "pointwise_bce":
             model, encoded = baseline_models._fit_fm_pointwise(
                 **common,
                 batch_size=int(parameters["batch_size"]),
@@ -151,7 +169,11 @@ def run_experiment(
                     "template": spec.template,
                     "stage": spec.stage,
                     "operator": spec.operator,
-                    "encoded_fields": list(encoded_field_names(spec.operator)),
+                    "encoded_fields": (
+                        list(encoded_field_names(spec.operator)) + [HISTORY_FIELD]
+                        if template.objective == "sequence_mlp"
+                        else list(encoded_field_names(spec.operator))
+                    ),
                     "member": member,
                     "seed": member_seed,
                     "validation_metrics": _metric_subset(metrics),
@@ -184,7 +206,11 @@ def run_experiment(
         "parameters": dict(spec.parameters),
         "stage": spec.stage,
         "operator": spec.operator,
-        "encoded_fields": list(encoded_field_names(spec.operator)),
+        "encoded_fields": (
+            list(encoded_field_names(spec.operator)) + [HISTORY_FIELD]
+            if template.objective == "sequence_mlp"
+            else list(encoded_field_names(spec.operator))
+        ),
         "operator_diagnostics": operator_diagnostics(
             splits, operator_name=spec.operator
         ),

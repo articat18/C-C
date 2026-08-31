@@ -14,6 +14,8 @@ import numpy as np
 
 import baseline as baseline_models
 from candidates.feature_pipeline import encode_candidate_splits
+from candidates.sequence_features import encode_sequence_splits
+from candidates.sequence_model import CausalSequenceMLP
 from data import load
 from evaluate import evaluate
 from submit import write_submission
@@ -63,8 +65,10 @@ def finalize_experiment(
     submission.parent.mkdir(parents=True, exist_ok=True)
 
     splits = load(str(spec.resolved_data_dir()))
-    encoded, dimension = encode_candidate_splits(
-        splits, operator_name=spec.operator
+    encoded, dimension = (
+        encode_sequence_splits(splits)
+        if get_template(spec.template).objective == "sequence_mlp"
+        else encode_candidate_splits(splits, operator_name=spec.operator)
     )
     X_test, labels_test, users_test = encoded["test"]
     template = get_template(spec.template)
@@ -77,18 +81,32 @@ def finalize_experiment(
             raise FinalizationError(
                 f"checkpoint member {member} does not match the approved specification"
             )
-        model = baseline_models.FM(
-            dimension,
-            k=int(spec.parameters["embedding_dim"]),
-            lr=float(spec.parameters["learning_rate"]),
-            l2=float(spec.parameters["l2"]),
-            seed=spec.seed + member,
-        )
-        if state["V"].shape != model.V.shape or state["W"].shape != model.W.shape:
-            raise FinalizationError(f"checkpoint member {member} has incompatible shapes")
-        model.V = state["V"]
-        model.W = state["W"]
-        model.b = np.float32(state["b"])
+        if template.objective == "sequence_mlp":
+            model = CausalSequenceMLP(
+                dimension,
+                embedding_dim=int(spec.parameters["embedding_dim"]),
+                hidden_dim=int(spec.parameters["hidden_dim"]),
+                learning_rate=float(spec.parameters["learning_rate"]),
+                l2=float(spec.parameters["l2"]),
+                seed=spec.seed + member,
+            )
+            expected = model.checkpoint_state()
+            if set(state) != set(expected) or any(state[name].shape != expected[name].shape for name in expected):
+                raise FinalizationError(f"checkpoint member {member} has incompatible shapes")
+            model.restore(state)
+        else:
+            model = baseline_models.FM(
+                dimension,
+                k=int(spec.parameters["embedding_dim"]),
+                lr=float(spec.parameters["learning_rate"]),
+                l2=float(spec.parameters["l2"]),
+                seed=spec.seed + member,
+            )
+            if state["V"].shape != model.V.shape or state["W"].shape != model.W.shape:
+                raise FinalizationError(f"checkpoint member {member} has incompatible shapes")
+            model.V = state["V"]
+            model.W = state["W"]
+            model.b = np.float32(state["b"])
         member_predictions.append(model.predict(X_test))
 
     scores = baseline_models._standardize(np.mean(member_predictions, axis=0))

@@ -217,6 +217,29 @@ class ExperimentControllerTests(unittest.TestCase):
             controller._validated_control(spec)["experiment_id"], "E0031"
         )
 
+    def test_sequence_model_can_use_matched_pointwise_control(self):
+        registry = ExperimentRegistry(self.root / "sequence-index.jsonl")
+        controller = ExperimentController(registry)
+        parameters = {
+            "embedding_dim": 16, "learning_rate": 0.001, "l2": 1e-6,
+            "patience": 4, "batch_size": 8192,
+        }
+        registry.append({
+            "experiment_id": "E0001", "status": "success", "template": "pointwise_fm",
+            "stage": "training", "operator": "none", "seed": 0,
+            "parameters": parameters, "budget": {"max_epochs": 40, "max_wall_seconds": 21600},
+            "data_dir": "./KuaiRand-Pure/data", "metrics": {"valid": {"primary": 0.6016}},
+        })
+        spec = ExperimentSpec.from_mapping({
+            "schema_version": 2, "experiment_id": "E0002", "template": "sequence_mlp",
+            "stage": "model", "operator": "none", "control_experiment_id": "E0001",
+            "hypothesis": "Use causal prior-positive-video history.",
+            "evidence": "History features show a measurable signal.",
+            "expected_effect": "Improve ranking with nonlinear history interactions.",
+            "parameters": {},
+        })
+        self.assertEqual(controller._validated_control(spec)["experiment_id"], "E0001")
+
 
 if __name__ == "__main__":
     unittest.main()

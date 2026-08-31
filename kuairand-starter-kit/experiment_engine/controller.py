@@ -396,9 +396,19 @@ class ExperimentController:
                 f"matched control is not a successful registered experiment: "
                 f"{spec.control_experiment_id}"
             )
+        model_comparison = (
+            spec.template == "sequence_mlp"
+            and control.get("template") == "pointwise_fm"
+            and spec.stage == "model"
+            and control.get("operator", "none") == "none"
+            and spec.operator == "none"
+        )
+        control_parameters = dict(spec.parameters)
+        if model_comparison:
+            control_parameters.pop("hidden_dim", None)
         expected = {
             "seed": spec.seed,
-            "parameters": dict(spec.parameters),
+            "parameters": control_parameters,
             "budget": {
                 "max_epochs": spec.budget.max_epochs,
                 "max_wall_seconds": spec.budget.max_wall_seconds,
@@ -424,10 +434,10 @@ class ExperimentController:
             and control.get("operator", "none") == "none"
             and spec.operator != "none"
         )
-        if not objective_comparison and not feature_comparison:
+        if not objective_comparison and not feature_comparison and not model_comparison:
             raise ControllerError(
                 "matched controls must compare one feature against an operator-none "
-                "control or LambdaRank against the same pointwise pipeline"
+                "control, a sequence model against pointwise FM, or LambdaRank against the same pointwise pipeline"
             )
         return control
 
