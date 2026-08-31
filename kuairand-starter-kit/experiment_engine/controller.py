@@ -6,10 +6,12 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
+import hashlib
 import os
 from pathlib import Path
 import signal
 import time
+import uuid
 from typing import Any, Iterator, Mapping
 
 from experiment_engine.checkpoints import _atomic_json_write
@@ -23,6 +25,7 @@ from experiment_engine.experiment_spec import (
 from experiment_engine.experiment_templates import TEMPLATES, TemplateValidationError
 from experiment_engine.reference_baseline import load_baseline_reference
 from experiment_engine.registry import ExperimentRegistry, RegistryError
+from experiment_engine.campaign import active_campaign
 from experiment_boundary import (
     CONVERGENCE_EPSILON,
     CONVERGENCE_PATIENCE,
@@ -53,11 +56,7 @@ class ExperimentController:
             raise ControllerError(f"experiment has already been executed: {run_directory}")
         run_directory.mkdir(parents=True, exist_ok=True)
         lock_path = run_directory / ".run.lock"
-        try:
-            descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.close(descriptor)
-        except FileExistsError as exc:
-            raise ControllerError(f"experiment is already running: {spec.experiment_id}") from exc
+        _create_run_lock(lock_path, experiment_id=spec.experiment_id)
         spec_path = run_directory / "spec.json"
         try:
             if spec_path.exists():
@@ -76,6 +75,10 @@ class ExperimentController:
                         result = run_experiment(spec, verbose=verbose)
                     comparison = self._compare_with_history(result)
                     result["comparison"] = comparison
+                    result["global_comparison"] = comparison
+                    matched_comparison = self._matched_comparison(spec, result)
+                    if matched_comparison is not None:
+                        result["matched_comparison"] = matched_comparison
                     _atomic_json_write(result_path, result)
                     record = {
                         "experiment_id": spec.experiment_id,
@@ -83,6 +86,14 @@ class ExperimentController:
                         "template": spec.template,
                         "stage": spec.stage,
                         "operator": spec.operator,
+                        "seed": spec.seed,
+                        "parameters": dict(spec.parameters),
+                        "budget": {
+                            "max_epochs": spec.budget.max_epochs,
+                            "max_wall_seconds": spec.budget.max_wall_seconds,
+                        },
+                        "data_dir": spec.data_dir,
+                        "control_experiment_id": spec.control_experiment_id,
                         "provenance": dict(spec.provenance or {}),
                         "spec_fingerprint": spec.fingerprint(),
                         "hypothesis": spec.hypothesis,
@@ -93,6 +104,11 @@ class ExperimentController:
                         "metrics": result["metrics"],
                         "diagnostics": result.get("diagnostics", {}),
                         "comparison": comparison,
+                        "global_comparison": comparison,
+                        **(
+                            {"matched_comparison": matched_comparison}
+                            if matched_comparison is not None else {}
+                        ),
                         "result_path": result_path.relative_to(
                             resolve_editable_path("experiments").parent
                         ).as_posix(),
@@ -139,8 +155,23 @@ class ExperimentController:
         evidence: str | None = None,
         expected_effect: str | None = None,
         provenance: Mapping[str, Any] | None = None,
+        control_experiment_id: str | None = None,
     ) -> tuple[ExperimentSpec, Path]:
         """Reserve an ID and write a validated template specification."""
+
+        if active_campaign() is not None:
+            from experiment_engine.campaign import campaign_root
+            if not (campaign_root() / "campaign.json").is_file():
+                raise ControllerError("campaign must be initialized before reserving experiments")
+            from agent.research import validate_source_ids
+            supplied_sources = dict(provenance or {}).get("research_sources", [])
+            if not isinstance(supplied_sources, list):
+                raise ControllerError("campaign provenance requires a research_sources list")
+            validated_sources = validate_source_ids([
+                str(item.get("source_id", "")) if isinstance(item, Mapping) else ""
+                for item in supplied_sources
+            ])
+            provenance = {**dict(provenance or {}), "research_sources": validated_sources}
 
         experiments_root = resolve_editable_path("experiments")
         experiments_root.mkdir(parents=True, exist_ok=True)
@@ -181,6 +212,10 @@ class ExperimentController:
                     "evidence": evidence or hypothesis,
                     "expected_effect": expected_effect or hypothesis,
                     **({"provenance": dict(provenance)} if provenance else {}),
+                    **(
+                        {"control_experiment_id": control_experiment_id}
+                        if control_experiment_id else {}
+                    ),
                 }
             )
             run_directory = experiments_root / experiment_id
@@ -296,14 +331,24 @@ class ExperimentController:
         return records[start:]
 
     def _preflight(self, spec: ExperimentSpec) -> None:
-        assert_protected_files_unchanged()
+        self.validate_candidate(spec)
         records = list(self.registry.records())
-        if len(records) >= MAX_ITERATIONS:
-            raise ControllerError(f"maximum of {MAX_ITERATIONS} experiments reached")
         if any(record.get("experiment_id") == spec.experiment_id for record in records):
             raise ControllerError(
                 f"experiment_id is already registered: {spec.experiment_id}"
             )
+
+    def validate_candidate(self, spec: ExperimentSpec) -> None:
+        """Validate a candidate against mutable campaign state without writing it.
+
+        Proposal syntax is checked before this point.  This method covers the
+        registry-dependent rules that are needed before reserving an ID.
+        """
+        assert_protected_files_unchanged()
+        records = list(self.registry.records())
+        if len(records) >= MAX_ITERATIONS:
+            raise ControllerError(f"maximum of {MAX_ITERATIONS} experiments reached")
+        self._validated_control(spec, records)
         scores = [
             float(record["metrics"]["valid"]["primary"])
             for record in self._records_since_resume(records)
@@ -337,6 +382,116 @@ class ExperimentController:
                 else "reject_or_refine"
             ),
         }
+
+    def _validated_control(
+        self,
+        spec: ExperimentSpec,
+        records: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
+        if spec.control_experiment_id is None:
+            return None
+        records = records if records is not None else list(self.registry.records())
+        control = next(
+            (
+                record for record in records
+                if record.get("experiment_id") == spec.control_experiment_id
+            ),
+            None,
+        )
+        if control is None or control.get("status") != "success":
+            raise ControllerError(
+                f"matched control is not a successful registered experiment: "
+                f"{spec.control_experiment_id}"
+            )
+        model_comparison = (
+            spec.template in {"sequence_mlp", "sequence_ensemble", "causal_attention"}
+            and control.get("template") == "pointwise_fm"
+            and spec.stage == "model"
+            and control.get("operator", "none") == "none"
+            and spec.operator == "none"
+        )
+        control_parameters = dict(spec.parameters)
+        if model_comparison:
+            control_parameters.pop("hidden_dim", None)
+        expected = {
+            "seed": spec.seed,
+            "parameters": control_parameters,
+            "budget": {
+                "max_epochs": spec.budget.max_epochs,
+                "max_wall_seconds": spec.budget.max_wall_seconds,
+            },
+            "data_dir": spec.data_dir,
+        }
+        mismatches = [
+            name for name, value in expected.items() if control.get(name) != value
+        ]
+        if mismatches:
+            raise ControllerError(
+                "matched control differs in immutable experiment settings: "
+                + ", ".join(mismatches)
+            )
+        objective_comparison = (
+            spec.template == "lambdarank_fm"
+            and control.get("template") == "pointwise_fm"
+            and spec.stage == "loss"
+            and control.get("operator", "none") == spec.operator
+        )
+        feature_comparison = (
+            control.get("template") == spec.template
+            and control.get("operator", "none") == "none"
+            and spec.operator != "none"
+        )
+        if not objective_comparison and not feature_comparison and not model_comparison:
+            raise ControllerError(
+                "matched controls must compare one feature against an operator-none "
+                "control, a sequence model against pointwise FM, or LambdaRank against the same pointwise pipeline"
+            )
+        return control
+
+    def _matched_comparison(
+        self, spec: ExperimentSpec, result: Mapping[str, Any]
+    ) -> dict[str, Any] | None:
+        control = self._validated_control(spec)
+        if control is None:
+            return None
+        candidate = float(result["metrics"]["valid"]["primary"])
+        reference = float(control["metrics"]["valid"]["primary"])
+        improvement = candidate - reference
+        evidence_threshold = 0.0005
+        return {
+            "reference": spec.control_experiment_id,
+            "control": reference,
+            "candidate": candidate,
+            "improvement": improvement,
+            "evidence_threshold": evidence_threshold,
+            "decision": "promising" if improvement >= evidence_threshold else "reject",
+        }
+
+
+def _create_run_lock(lock_path: Path, *, experiment_id: str) -> None:
+    """Create an exclusive, inspectable execution lease.
+
+    A supervisor can distinguish an active owner from a lock left behind by a
+    killed process; the controller itself never removes another process's lock.
+    """
+    payload = {
+        "schema_version": 1,
+        "experiment_id": experiment_id,
+        "pid": os.getpid(),
+        "run_id": uuid.uuid4().hex,
+        "started_at": _utc_now(),
+        "heartbeat_at": _utc_now(),
+    }
+    try:
+        descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError as exc:
+        raise ControllerError(f"experiment is already running: {experiment_id}") from exc
+    try:
+        encoded = json.dumps(payload, sort_keys=True).encode("utf-8")
+        os.write(descriptor, encoded)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def _has_converged(scores: list[float]) -> bool:
@@ -396,6 +551,10 @@ def _exclusive_json_write(path: Path, value: Any) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--campaign",
+        help="use an isolated campaign workspace under campaigns/<name>/",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     run_parser = subparsers.add_parser("run", help="run one approved experiment")
     run_parser.add_argument("spec", help="path to a JSON experiment specification")
@@ -412,20 +571,52 @@ def main() -> int:
     create_parser.add_argument("--operator", default="none")
     create_parser.add_argument("--evidence")
     create_parser.add_argument("--expected-effect")
+    create_parser.add_argument("--control-experiment-id")
+    create_parser.add_argument(
+        "--research-source-id", action="append", default=[],
+        help="saved S-... evidence ID (required for campaign experiments)",
+    )
     continue_parser = subparsers.add_parser(
         "continue", help="open a new research window after convergence"
     )
     continue_parser.add_argument("--reason", required=True)
     subparsers.add_parser("status", help="show experiment-loop status")
+    subparsers.add_parser("init-campaign", help="initialize the selected Phase 6 campaign")
     args = parser.parse_args()
 
-    controller = ExperimentController()
     try:
+        if args.campaign:
+            from experiment_engine.campaign import configure_campaign
+            configure_campaign(args.campaign)
+        if args.command == "init-campaign":
+            if not args.campaign:
+                raise ControllerError("init-campaign requires --campaign")
+            from experiment_engine.campaign import initialize_campaign
+            output = initialize_campaign(args.campaign)
+            print(json.dumps(output, sort_keys=True, indent=2))
+            return 0
+        controller = ExperimentController()
         if args.command == "run":
             spec_path = resolve_editable_path(args.spec)
             spec = ExperimentSpec.load(spec_path)
             output = controller.run(spec, verbose=not args.quiet)
         elif args.command == "create":
+            provenance = None
+            if args.research_source_id:
+                from agent.research import validate_source_ids
+                sources = validate_source_ids(args.research_source_id)
+                fingerprint_input = json.dumps({
+                    "template": args.template, "hypothesis": args.hypothesis,
+                    "seed": args.seed, "sources": [item["source_id"] for item in sources],
+                }, sort_keys=True, separators=(",", ":")).encode("utf-8")
+                provenance = {
+                    "proposal_fingerprint": hashlib.sha256(fingerprint_input).hexdigest(),
+                    "context_fingerprint": None,
+                    "source_model": "manual_campaign_control",
+                    "token_usage": {},
+                    "manual_interventions": 1,
+                    "research_sources": sources,
+                }
             spec, path = controller.create(
                 args.template,
                 args.hypothesis,
@@ -434,6 +625,8 @@ def main() -> int:
                 operator=args.operator,
                 evidence=args.evidence,
                 expected_effect=args.expected_effect,
+                provenance=provenance,
+                control_experiment_id=args.control_experiment_id,
             )
             output = {
                 "experiment_id": spec.experiment_id,

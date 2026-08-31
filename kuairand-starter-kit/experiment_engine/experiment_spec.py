@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 from typing import Any, Mapping
 
-from candidates.feature_pipeline import validate_pipeline_selection
+from candidates.feature_pipeline import OPERATORS, validate_pipeline_selection
 from experiment_engine.experiment_templates import get_template
 from experiment_boundary import MAX_WALL_SECONDS, REPOSITORY_ROOT
 
@@ -33,6 +33,7 @@ V2_TOP_LEVEL_FIELDS = V1_TOP_LEVEL_FIELDS | {
     "evidence",
     "expected_effect",
     "provenance",
+    "control_experiment_id",
 }
 MAX_EPOCHS = 40
 
@@ -40,11 +41,13 @@ PARAMETER_STAGES = {
     "bpr_weight": "loss",
     "bce_weight": "loss",
     "embedding_dim": "model",
+    "hidden_dim": "model",
     "popularity_weight": "model",
     "learning_rate": "training",
     "l2": "training",
     "patience": "training",
     "negatives_per_positive": "training",
+    "batch_size": "training",
 }
 
 
@@ -97,6 +100,7 @@ class ExperimentSpec:
     evidence: str = ""
     expected_effect: str = ""
     provenance: Mapping[str, Any] | None = None
+    control_experiment_id: str | None = None
 
     @classmethod
     def from_mapping(cls, value: Any) -> "ExperimentSpec":
@@ -164,7 +168,14 @@ class ExperimentSpec:
             if not isinstance(stage, str) or not isinstance(operator, str):
                 raise SpecificationError("stage and operator must be strings")
             try:
-                validate_pipeline_selection(stage, operator)
+                if template_name == "lambdarank_fm" and stage == "loss":
+                    if operator not in OPERATORS:
+                        raise ValueError(
+                            f"unknown inherited operator {operator!r}; "
+                            f"choose one of {sorted(OPERATORS)}"
+                        )
+                else:
+                    validate_pipeline_selection(stage, operator)
             except ValueError as exc:
                 raise SpecificationError(str(exc)) from exc
             for field_name, field_value in (
@@ -181,6 +192,20 @@ class ExperimentSpec:
             expected_effect = expected_effect.strip()
             _validate_one_change(template_name, parameters, stage, operator)
         provenance = _validate_provenance(value.get("provenance"))
+        control_experiment_id = value.get("control_experiment_id")
+        if control_experiment_id is not None and (
+            not isinstance(control_experiment_id, str)
+            or not EXPERIMENT_ID.fullmatch(control_experiment_id)
+        ):
+            raise SpecificationError(
+                "control_experiment_id must match E followed by 4-8 digits or be null"
+            )
+        if control_experiment_id == experiment_id:
+            raise SpecificationError("an experiment cannot control itself")
+        if template_name == "lambdarank_fm" and control_experiment_id is None:
+            raise SpecificationError(
+                "lambdarank_fm requires a matched pointwise control experiment"
+            )
         data_dir = value.get("data_dir", "./KuaiRand-Pure/data")
         if not isinstance(data_dir, str) or not data_dir.strip():
             raise SpecificationError("data_dir must be a non-empty string")
@@ -199,6 +224,7 @@ class ExperimentSpec:
             evidence=evidence,
             expected_effect=expected_effect,
             provenance=provenance,
+            control_experiment_id=control_experiment_id,
         )
 
     @classmethod
@@ -233,6 +259,8 @@ class ExperimentSpec:
             })
             if self.provenance is not None:
                 value["provenance"] = dict(self.provenance)
+            if self.control_experiment_id is not None:
+                value["control_experiment_id"] = self.control_experiment_id
         return value
 
     def fingerprint(self) -> str:
@@ -304,7 +332,7 @@ def _validate_provenance(value: Any) -> dict[str, Any] | None:
         raise SpecificationError("provenance must be a JSON object")
     allowed = {
         "proposal_fingerprint", "context_fingerprint", "source_model",
-        "token_usage", "manual_interventions",
+        "token_usage", "manual_interventions", "research_sources", "recovery_of",
     }
     unknown = sorted(set(value) - allowed)
     if unknown:
@@ -353,10 +381,40 @@ def _validate_provenance(value: Any) -> dict[str, Any] | None:
         raise SpecificationError(
             "provenance.manual_interventions must be a non-negative integer"
         )
+    recovery_of = value.get("recovery_of")
+    if recovery_of is not None and (
+        not isinstance(recovery_of, str) or not EXPERIMENT_ID.fullmatch(recovery_of)
+    ):
+        raise SpecificationError("provenance.recovery_of must be an experiment ID or null")
+    sources = value.get("research_sources", [])
+    if not isinstance(sources, list):
+        raise SpecificationError("provenance.research_sources must be an array")
+    normalized_sources = []
+    for source in sources:
+        if not isinstance(source, Mapping):
+            raise SpecificationError("provenance.research_sources entries must be objects")
+        source_id = source.get("source_id")
+        url = source.get("url")
+        content_hash = source.get("content_sha256")
+        if (
+            not isinstance(source_id, str) or not re.fullmatch(r"S-[0-9a-f]{16}", source_id)
+            or not isinstance(url, str) or not url.startswith("https://")
+            or not isinstance(content_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", content_hash)
+        ):
+            raise SpecificationError("provenance.research_sources entries are invalid")
+        normalized_sources.append({
+            "source_id": source_id,
+            "url": url,
+            "title": str(source.get("title", "")),
+            "content_sha256": content_hash,
+            "summary": str(source.get("summary", "")),
+        })
     return {
         "proposal_fingerprint": proposal_hash,
         "context_fingerprint": context_hash,
         "source_model": source_model,
         "token_usage": normalized_usage,
         "manual_interventions": interventions,
+        "research_sources": normalized_sources,
+        **({"recovery_of": recovery_of} if recovery_of is not None else {}),
     }

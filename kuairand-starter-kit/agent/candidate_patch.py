@@ -22,6 +22,7 @@ from agent.config import VertexConfig
 from agent.proposal import _extract_token_usage, context_fingerprint
 from experiment_engine.checkpoints import _atomic_json_write
 from experiment_engine.experiment_templates import get_template
+from experiment_engine.campaign import active_campaign
 from experiment_boundary import REPOSITORY_ROOT, resolve_editable_path
 
 
@@ -261,6 +262,25 @@ def promote_candidate_patch(
 
     if confirmation != PROMOTION_CONFIRMATION:
         raise CandidatePatchError("candidate patch promotion requires explicit confirmation")
+    return _promote_candidate_patch(proposal, report, manual_interventions=1)
+
+
+def auto_promote_candidate_patch(
+    proposal: CandidatePatchProposal,
+    report: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Promote a Phase 6 patch only after complete sandbox and result evidence."""
+    if active_campaign() is None:
+        raise CandidatePatchError("automatic promotion is available only inside a campaign")
+    return _promote_candidate_patch(proposal, report, manual_interventions=0)
+
+
+def _promote_candidate_patch(
+    proposal: CandidatePatchProposal,
+    report: Mapping[str, Any],
+    *,
+    manual_interventions: int,
+) -> dict[str, Any]:
     if report.get("status") != "accepted":
         raise CandidatePatchError("candidate patch report is not accepted")
     if report.get("content_hash") != proposal.content_hash:
@@ -303,7 +323,8 @@ def promote_candidate_patch(
         "content_hash": proposal.content_hash,
         "touched_paths": expected_paths,
         "promoted_at": datetime.now(timezone.utc).isoformat(),
-        "manual_interventions": 1,
+        "manual_interventions": manual_interventions,
+        "promotion_policy": "autonomous_verified" if not manual_interventions else "manual_reviewed",
     }
 
 
@@ -527,19 +548,24 @@ def _run(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--campaign", help="use an isolated campaign workspace")
     parser.add_argument("artifact", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--promote-report", type=Path)
     parser.add_argument("--confirmation")
+    parser.add_argument("--auto-promote", action="store_true")
     args = parser.parse_args()
+    if args.campaign:
+        from experiment_engine.campaign import configure_campaign
+        configure_campaign(args.campaign)
     proposal = load_candidate_patch_artifact(args.artifact)
     if args.promote_report:
         report_path = resolve_editable_path(args.promote_report)
         report = json.loads(report_path.read_text(encoding="utf-8"))
-        output = promote_candidate_patch(
-            proposal,
-            report,
-            confirmation=args.confirmation or "",
+        output = (
+            auto_promote_candidate_patch(proposal, report)
+            if args.auto_promote
+            else promote_candidate_patch(proposal, report, confirmation=args.confirmation or "")
         )
     else:
         output = validate_candidate_patch(proposal)

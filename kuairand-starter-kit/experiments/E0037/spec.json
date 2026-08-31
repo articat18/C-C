@@ -1,0 +1,23 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "Date period remains positive at seeds zero and one; exposure requires a third paired seed after a mixed result.",
+  "expected_effect": "Reproduce pointwise performance within documented seed variation and provide a seed-two control.",
+  "experiment_id": "E0037",
+  "hypothesis": "A governed seed-two pointwise FM provides the final matched control for replicated feature effects.",
+  "operator": "none",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "schema_version": 2,
+  "seed": 2,
+  "stage": "training",
+  "template": "pointwise_fm"
+}

@@ -1,0 +1,24 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "control_experiment_id": "E0030",
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "Training has 24,076 zero-duration rows and validation has 2,107; the missing-duration subgroup is consistently weak.",
+  "expected_effect": "Improve validation primary by at least 0.0005 against the identical E0030 control before replication.",
+  "experiment_id": "E0045",
+  "hypothesis": "Distinguishing zero or missing duration from observed duration improves pointwise ranking.",
+  "operator": "missing_duration_category",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "cleaning",
+  "template": "pointwise_fm"
+}

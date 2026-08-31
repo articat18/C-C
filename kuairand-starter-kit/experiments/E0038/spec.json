@@ -1,0 +1,24 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "control_experiment_id": "E0037",
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "Date period produced positive matched deltas at seeds zero and one.",
+  "expected_effect": "Produce a positive matched primary delta against E0037 and complete three-seed confirmation.",
+  "experiment_id": "E0038",
+  "hypothesis": "The date-period feature repeats its positive matched effect at seed two.",
+  "operator": "date_period_bucket",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "schema_version": 2,
+  "seed": 2,
+  "stage": "features",
+  "template": "pointwise_fm"
+}

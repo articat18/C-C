@@ -6,6 +6,7 @@ from unittest import mock
 from agent.autonomous import AutonomousResearchAgent
 from agent.proposal import parse_proposal
 from experiment_engine.experiment_runner import ExperimentTimeout
+from experiment_engine.controller import ControllerError
 
 
 class AutonomousAgentTests(unittest.TestCase):
@@ -76,6 +77,89 @@ class AutonomousAgentTests(unittest.TestCase):
         self.assertEqual(orchestrator.run_proposal.call_count, 2)
         self.assertEqual(decisions[0]["recovery"]["action"], "retry_once")
         self.assertEqual(decisions[0]["reflection"]["decision"], "change_direction")
+
+    def test_invalid_model_proposal_routes_to_source_backed_fallback(self):
+        orchestrator = mock.Mock()
+        orchestrator.controller.status.return_value = {"converged": False}
+        orchestrator.run_proposal.return_value = {
+            "result": {
+                "operator": "date_period_bucket",
+                "comparison": {"decision": "reject_or_refine", "candidate": 0.60},
+                "diagnostics": {"validation_subgroups": {}},
+            }
+        }
+        client = mock.Mock()
+        client.propose.side_effect = ValueError("multiple scalar changes")
+        agent = AutonomousResearchAgent(orchestrator=orchestrator, client=client)
+        context = {
+            "research_sources": [{"source_id": "S-0123456789abcdef"}],
+            "experiments": [],
+        }
+        with mock.patch("agent.autonomous.resolve_editable_path", return_value=self.log), mock.patch(
+            "agent.autonomous.build_agent_context", return_value=context
+        ):
+            decisions = agent.run(context, execute=True)
+        self.assertEqual(decisions[0]["recovery"]["action"], "deterministic_fallback")
+        self.assertEqual(decisions[0]["proposal"]["operator"], "date_period_bucket")
+        orchestrator.run_proposal.assert_called_once()
+
+    def test_transient_proposal_service_retries_with_bounded_backoff(self):
+        orchestrator = mock.Mock()
+        orchestrator.controller.status.return_value = {"converged": False}
+        client = mock.Mock()
+        client.propose.side_effect = [
+            RuntimeError("503 service unavailable"),
+            RuntimeError("temporary network timeout"),
+            self.proposal,
+        ]
+        agent = AutonomousResearchAgent(orchestrator=orchestrator, client=client)
+        with mock.patch("agent.autonomous.time.sleep") as sleep:
+            proposal, recovery = agent._propose_with_recovery({})
+        self.assertEqual(proposal, self.proposal)
+        self.assertIsNone(recovery)
+        self.assertEqual(client.propose.call_count, 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [5, 30])
+
+    def test_controller_contract_rejection_is_corrected_before_execution(self):
+        orchestrator = mock.Mock()
+        corrected = parse_proposal({
+            "template": "bpr_hybrid", "stage": "features", "operator": "date_period_bucket",
+            "hypothesis": "Correct the screen.", "evidence": "Evidence.",
+            "expected_effect": "Measure ranking.", "parameters": {}, "seed": 1,
+        })
+        orchestrator.preflight_proposal.side_effect = [
+            ControllerError("matched control differs in immutable experiment settings: parameters"),
+            None,
+        ]
+        client = mock.Mock()
+        client.propose.return_value = corrected
+        agent = AutonomousResearchAgent(orchestrator=orchestrator, client=client)
+        proposal, recovery, rejections = agent._preflight_or_recover(self.proposal, {})
+        self.assertEqual(proposal, corrected)
+        self.assertEqual(recovery["action"], "controller_contract_correction")
+        self.assertEqual(len(rejections), 1)
+        self.assertEqual(orchestrator.preflight_proposal.call_count, 2)
+
+    def test_failed_contract_correction_uses_preflighted_fallback(self):
+        orchestrator = mock.Mock()
+        corrected = parse_proposal({
+            "template": "bpr_hybrid", "stage": "features", "operator": "date_period_bucket",
+            "hypothesis": "Still mismatched.", "evidence": "Evidence.",
+            "expected_effect": "Measure ranking.", "parameters": {}, "seed": 1,
+        })
+        mismatch = ControllerError("matched control differs in immutable experiment settings: parameters")
+        orchestrator.preflight_proposal.side_effect = [mismatch, mismatch, None]
+        client = mock.Mock()
+        client.propose.return_value = corrected
+        agent = AutonomousResearchAgent(orchestrator=orchestrator, client=client)
+        proposal, recovery, rejections = agent._preflight_or_recover(
+            self.proposal,
+            {"research_sources": [{"source_id": "S-0123456789abcdef"}], "experiments": []},
+        )
+        self.assertEqual(proposal.operator, "date_period_bucket")
+        self.assertEqual(proposal.template, "pointwise_fm")
+        self.assertEqual(recovery["action"], "deterministic_fallback_after_preflight")
+        self.assertEqual(len(rejections), 2)
 
 
 if __name__ == "__main__":

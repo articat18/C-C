@@ -1,0 +1,23 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "E0031, E0035, and E0038 were positive against paired controls in all three seeds; their existing-checkpoint average reached validation primary 0.603005.",
+  "expected_effect": "Reproduce a stronger validation score than any single date-period member while retaining validation-only selection.",
+  "experiment_id": "E0046",
+  "hypothesis": "A three-seed pointwise ensemble reduces variance for the date-period feature that passed paired replication.",
+  "operator": "date_period_bucket",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "features",
+  "template": "pointwise_ensemble"
+}

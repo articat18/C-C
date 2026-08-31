@@ -1,0 +1,24 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "control_experiment_id": "E0038",
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "Seeds zero and one produced small positive matched deltas below the evidence threshold; seed two completes the precommitted comparison.",
+  "expected_effect": "Determine whether LambdaRank reaches the replicated mean matched-gain threshold without sacrificing nDCG@5.",
+  "experiment_id": "E0042",
+  "hypothesis": "Delta-nDCG@5-weighted fine-tuning completes the three-seed evaluation of the pointwise-plus-date anchor.",
+  "operator": "date_period_bucket",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "schema_version": 2,
+  "seed": 2,
+  "stage": "loss",
+  "template": "lambdarank_fm"
+}

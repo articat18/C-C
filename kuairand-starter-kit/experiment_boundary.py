@@ -25,6 +25,7 @@ EDITABLE_ROOTS = (
     "experiment_engine",
     "experiments",
     "runs",
+    "campaigns",
 )
 
 TRAINING_SPLIT = "train"
@@ -68,6 +69,12 @@ def assert_protected_files_unchanged() -> None:
 def resolve_editable_path(path: str | Path) -> Path:
     candidate = Path(path)
     if not candidate.is_absolute():
+        # Import lazily to keep this foundational boundary module dependency-free.
+        try:
+            from experiment_engine.campaign import scoped_path
+            candidate = scoped_path(candidate)
+        except ImportError:  # pragma: no cover - command-line bootstrap fallback.
+            pass
         candidate = REPOSITORY_ROOT / candidate
     candidate = candidate.resolve()
     try:

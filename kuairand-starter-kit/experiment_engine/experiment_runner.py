@@ -19,6 +19,8 @@ from candidates.feature_pipeline import (
     operator_diagnostics,
     training_sample_weights,
 )
+from candidates.sequence_features import ATTENTION_HISTORY_FIELDS, HISTORY_FIELD, encode_attention_sequence_splits, encode_sequence_splits
+from candidates.sequence_model import fit_causal_attention, fit_sequence_mlp
 from data import load
 from evaluate import evaluate
 from experiment_engine.checkpoints import CheckpointManager
@@ -73,10 +75,14 @@ def run_experiment(
     del loaded
 
     parameters = dict(spec.parameters)
-    popularity_weight = float(parameters.pop("popularity_weight"))
+    popularity_weight = float(parameters.pop("popularity_weight", 0.0))
     encode_fn = lambda candidate_splits: encode_candidate_splits(
         candidate_splits, operator_name=spec.operator
     )
+    if template.objective == "sequence_mlp":
+        encode_fn = encode_sequence_splits
+    elif template.objective == "causal_attention":
+        encode_fn = encode_attention_sequence_splits
     sample_weights = training_sample_weights(splits, operator_name=spec.operator)
     member_predictions: list[np.ndarray] = []
     checkpoints = []
@@ -92,21 +98,77 @@ def run_experiment(
                 f"[{spec.experiment_id}] member {member + 1}/"
                 f"{template.ensemble_members}, seed={member_seed}"
             )
-        model, encoded = baseline_models._fit_fm_bpr(
-            splits,
-            k=int(parameters["embedding_dim"]),
-            lr=float(parameters["learning_rate"]),
-            epochs=spec.budget.max_epochs,
-            patience=int(parameters["patience"]),
-            seed=member_seed,
-            verbose=verbose,
-            neg_per_pos=int(parameters["negatives_per_positive"]),
-            bpr_weight=float(parameters["bpr_weight"]),
-            bce_weight=float(parameters["bce_weight"]),
-            l2=float(parameters["l2"]),
-            encode_fn=encode_fn,
-            train_sample_weights=sample_weights,
-        )
+        common = {
+            "splits": splits,
+            "k": int(parameters["embedding_dim"]),
+            "lr": float(parameters["learning_rate"]),
+            "epochs": spec.budget.max_epochs,
+            "patience": int(parameters["patience"]),
+            "seed": member_seed,
+            "verbose": verbose,
+            "l2": float(parameters["l2"]),
+            "encode_fn": encode_fn,
+            "train_sample_weights": sample_weights,
+        }
+        if template.objective == "sequence_mlp":
+            model, encoded = fit_sequence_mlp(
+                splits,
+                embedding_dim=int(parameters["embedding_dim"]),
+                hidden_dim=int(parameters["hidden_dim"]),
+                learning_rate=float(parameters["learning_rate"]),
+                l2=float(parameters["l2"]),
+                epochs=spec.budget.max_epochs,
+                patience=int(parameters["patience"]),
+                batch_size=int(parameters["batch_size"]),
+                seed=member_seed,
+                encode_fn=encode_fn,
+                verbose=verbose,
+            )
+        elif template.objective == "causal_attention":
+            model, encoded = fit_causal_attention(
+                splits,
+                embedding_dim=int(parameters["embedding_dim"]),
+                hidden_dim=int(parameters["hidden_dim"]),
+                learning_rate=float(parameters["learning_rate"]),
+                l2=float(parameters["l2"]),
+                epochs=spec.budget.max_epochs,
+                patience=int(parameters["patience"]),
+                batch_size=int(parameters["batch_size"]),
+                seed=member_seed,
+                encode_fn=encode_fn,
+                verbose=verbose,
+            )
+        elif template.objective == "pointwise_bce":
+            model, encoded = baseline_models._fit_fm_pointwise(
+                **common,
+                batch_size=int(parameters["batch_size"]),
+            )
+        elif template.objective == "lambdarank":
+            if spec.control_experiment_id is None:
+                raise ValueError("LambdaRank requires a matched control checkpoint")
+            control_checkpoint = checkpoint_manager.load_member(
+                spec.control_experiment_id, member
+            )
+            control_metadata = control_checkpoint["metadata"]
+            if control_metadata.get("experiment_id") != spec.control_experiment_id:
+                raise ValueError("matched control checkpoint metadata is inconsistent")
+            if control_metadata.get("encoded_fields") != list(
+                encoded_field_names(spec.operator)
+            ):
+                raise ValueError("matched control checkpoint uses a different feature pipeline")
+            lambda_common = dict(common)
+            lambda_common["lr"] = float(lambda_common["lr"]) * 0.1
+            model, encoded = baseline_models._fit_fm_lambdarank(
+                **lambda_common,
+                initial_state=control_checkpoint["state"],
+            )
+        else:
+            model, encoded = baseline_models._fit_fm_bpr(
+                **common,
+                neg_per_pos=int(parameters["negatives_per_positive"]),
+                bpr_weight=float(parameters["bpr_weight"]),
+                bce_weight=float(parameters["bce_weight"]),
+            )
         X_valid, valid_labels, valid_users = encoded["valid"]
         predictions = model.predict(X_valid)
         metrics = evaluate(valid_users, valid_labels, predictions)
@@ -123,7 +185,15 @@ def run_experiment(
                     "template": spec.template,
                     "stage": spec.stage,
                     "operator": spec.operator,
-                    "encoded_fields": list(encoded_field_names(spec.operator)),
+                    "encoded_fields": (
+                        list(encoded_field_names(spec.operator)) + [HISTORY_FIELD]
+                        if template.objective == "sequence_mlp"
+                        else (
+                            list(encoded_field_names(spec.operator)) + list(ATTENTION_HISTORY_FIELDS)
+                            if template.objective == "causal_attention"
+                            else list(encoded_field_names(spec.operator))
+                        )
+                    ),
                     "member": member,
                     "seed": member_seed,
                     "validation_metrics": _metric_subset(metrics),
@@ -147,9 +217,24 @@ def run_experiment(
         "experiment_id": spec.experiment_id,
         "spec_fingerprint": spec.fingerprint(),
         "template": spec.template,
+        "objective": template.objective,
+        "objective_diagnostics": (
+            {"fine_tune_learning_rate": float(spec.parameters["learning_rate"]) * 0.1}
+            if template.objective == "lambdarank" else {}
+        ),
+        "seed": spec.seed,
+        "parameters": dict(spec.parameters),
         "stage": spec.stage,
         "operator": spec.operator,
-        "encoded_fields": list(encoded_field_names(spec.operator)),
+        "encoded_fields": (
+            list(encoded_field_names(spec.operator)) + [HISTORY_FIELD]
+            if template.objective == "sequence_mlp"
+            else (
+                list(encoded_field_names(spec.operator)) + list(ATTENTION_HISTORY_FIELDS)
+                if template.objective == "causal_attention"
+                else list(encoded_field_names(spec.operator))
+            )
+        ),
         "operator_diagnostics": operator_diagnostics(
             splits, operator_name=spec.operator
         ),

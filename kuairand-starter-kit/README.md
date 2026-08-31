@@ -168,8 +168,9 @@ python3 -m agent.autonomous --max-steps 3 --execute
 
 Phase 3's strongest candidates were re-run with `--seed 1` and `--seed 2`; none
 exceeded the protected baseline. All selection remains validation-only; test
-evaluation still requires a separate human approval receipt. Phase 4 is now the
-next milestone.
+evaluation still requires a separate human approval receipt. Phase 4 is
+complete; Phase 5 advanced ranking is closed with a validation-only best
+candidate, and Phase 6 autonomy work is the next milestone.
 
 ### Phase 4 governed operator workflow
 
@@ -277,6 +278,8 @@ The initial approved templates are:
 
 | Template | Purpose |
 |---|---|
+| `pointwise_fm` | Official-style pointwise FM for baseline-aligned feature controls |
+| `pointwise_ensemble` | Three-seed pointwise FM ensemble for confirmed feature effects |
 | `bpr_hybrid` | One FM trained with within-user BPR plus auxiliary BCE |
 | `bpr_ensemble` | Three consecutive-seed hybrid-BPR FMs with an optional popularity prior |
 
@@ -296,14 +299,68 @@ The project follows the phases in the repository-level `ARCHITECTURE.md`:
 | Phase 2: EDA and subgroup diagnostics | Complete |
 | Phase 3: first bounded research cycle | Complete (best candidate 0.60114; baseline 0.6016) |
 | Phase 4: governed full-stack autonomy | Complete (reviewed operators, sandboxed patches, recovery, reflection, and audit evidence) |
-| Phase 5: advanced ranking | Planned |
-| Phase 6: optional multi-agent expansion | Deferred |
+| Phase 5: advanced ranking | Complete (E0046: 0.603005 validation primary; no test access) |
+| Phase 6: task-completion campaign | Planned (single-agent research, sandboxed patches, sustained validation gains) |
+
+Phase 6 uses a separate `campaigns/phase6/` workspace, preserving the completed
+Phase 5 registry. Initialize it with `python3 -m experiment_engine.controller
+--campaign phase6 init-campaign`. All campaign commands require the same
+`--campaign phase6` flag. The agent records immutable live research-source
+artifacts before proposing an experiment; fetched material is reference-only and
+cannot supply executable instructions. Only sandbox-verified patches with
+successful validation evidence can be auto-promoted. Final test access remains
+human-gated and additionally requires a three-seed candidate at least `+0.002`
+above the official validation primary.
 
 Gemini proposals now use the schema-version-2 contract and can choose one
 reviewed cleaning or feature operator, or one scalar change across loss, model,
-and training stages. Sandboxed candidate-code generation remains deferred until
-the reviewed operator loop is reliable. See the repository-level
-`ARCHITECTURE.MD` for its safety gates and completion criteria.
+and training stages. Fingerprinted sandboxed candidate patches are supported by
+the governed Phase 4 workflow. See the repository-level `ARCHITECTURE.MD` for
+its safety gates and completion criteria.
+
+### Phase 5 closeout
+
+Phase 5 first establishes a governed `pointwise_fm` candidate that reproduces
+the protected official baseline while accepting reviewed feature operators.
+Feature experiments name an explicit control experiment with the same template,
+seed, parameters, budget, and data path. Results retain the global comparison
+used for promotion and add a matched comparison used to decide whether an
+individual component deserves replication.
+
+The seed-zero screen evaluated `date_period_bucket`, `user_activity_bucket`, and
+`user_video_exposure_bucket` against E0030. Date period and exposure advanced to
+paired seeds one and two. Date period passed with positive effects in all three
+seeds and a mean matched primary gain of `0.000755`; exposure was positive in
+two seeds but missed the predeclared mean-gain threshold, and user activity was
+rejected at seed zero. E0038 is the current best validation candidate at
+`0.602369`.
+
+No two-feature composite was justified by this screen. E0040–E0042 then
+evaluated LambdaRank against the replicated pointwise-plus-date-period anchors.
+All three matched primary deltas were positive, but their mean was only
+`0.000110`, and mean matched `nDCG@5` gain was effectively zero (`0.000024`).
+LambdaRank therefore does not advance. The three replicated date-period
+checkpoints were then averaged in E0046, which reached `0.603005` primary
+(`+0.001405` over the published baseline), with both GAUC and nDCG@5 improving
+by approximately `0.00145`. It is the strongest validation candidate but still
+remains below the conservative global promotion threshold. Phase 5 is closed:
+the remaining experiment budget is deliberately retained for a separate Phase 6
+autonomy campaign, rather than spent on unsupported follow-up variants. No test
+rows were accessed and E0046 is not approved for finalization.
+
+Create a matched feature experiment by passing the successful pointwise control
+ID returned by the controller:
+
+```bash
+python3 -m experiment_engine.controller create \
+  --template pointwise_fm \
+  --stage features \
+  --operator date_period_bucket \
+  --control-experiment-id E0030 \
+  --hypothesis "A training-fitted date period improves pointwise FM ranking." \
+  --evidence "Validation positive-rate drift suggests a temporal effect." \
+  --expected-effect "Improve primary score over the identical seed-zero control."
+```
 
 Run the deterministic Phase 2 dataset profile with:
 

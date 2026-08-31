@@ -1,0 +1,214 @@
+{
+  "checkpoints": [
+    {
+      "arrays": "experiments/E0032/checkpoints/member-00.npz",
+      "metadata": "experiments/E0032/checkpoints/member-00.json"
+    }
+  ],
+  "comparison": {
+    "candidate": 0.6005904674530029,
+    "decision": "reject_or_refine",
+    "epsilon": 0.002,
+    "improvement": -0.0015682578086853027,
+    "previous_best": 0.6021587252616882,
+    "reference": "E0031"
+  },
+  "completed_at": "2026-08-31T08:10:53.054985+00:00",
+  "diagnostics": {
+    "baseline_comparison": {
+      "metrics": {
+        "GAUC": {
+          "baseline": 0.6674,
+          "candidate": 0.6657450795173645,
+          "delta": -0.0016549204826354913
+        },
+        "nDCG@5": {
+          "baseline": 0.5357,
+          "candidate": 0.5354357957839966,
+          "delta": -0.00026420421600337196
+        },
+        "primary": {
+          "baseline": 0.6016,
+          "candidate": 0.6005904674530029,
+          "delta": -0.001009532546997094
+        }
+      },
+      "split": "valid"
+    },
+    "validation_subgroups": {
+      "date_period/early": {
+        "GAUC": 0.663938050952134,
+        "nDCG@5": 0.4988548589250531,
+        "primary": 0.5813964549385935,
+        "rows": 67168,
+        "users": 18488
+      },
+      "date_period/late": {
+        "GAUC": 0.6581394628087829,
+        "nDCG@5": 0.48237804949890095,
+        "primary": 0.5702587561538419,
+        "rows": 57741,
+        "users": 17075
+      },
+      "duration/long_15001+": {
+        "GAUC": 0.6540554997877024,
+        "nDCG@5": 0.5265410674625239,
+        "primary": 0.5902982836251132,
+        "rows": 106475,
+        "users": 21730
+      },
+      "duration/medium_5001-15000": {
+        "GAUC": 0.6973041345645709,
+        "nDCG@5": 0.4013669623706923,
+        "primary": 0.5493355484676316,
+        "rows": 16319,
+        "users": 9213
+      },
+      "duration/missing_zero": {
+        "GAUC": 0.626937984496124,
+        "nDCG@5": 0.08648935864047405,
+        "primary": 0.35671367156829903,
+        "rows": 2107,
+        "users": 1736
+      },
+      "duration/short_0-5000": {
+        "GAUC": 0.5,
+        "nDCG@5": 0.375,
+        "primary": 0.4375,
+        "rows": 8,
+        "users": 8
+      },
+      "item_popularity/01-05": {
+        "GAUC": 0.6666666666666666,
+        "nDCG@5": 0.18320502930605814,
+        "primary": 0.4249358479863624,
+        "rows": 376,
+        "users": 316
+      },
+      "item_popularity/06-20": {
+        "GAUC": 0.7167604049493813,
+        "nDCG@5": 0.24726715578918743,
+        "primary": 0.4820137803692844,
+        "rows": 3360,
+        "users": 2598
+      },
+      "item_popularity/101+": {
+        "GAUC": 0.6602711139587587,
+        "nDCG@5": 0.5344594707721234,
+        "primary": 0.5973652923654411,
+        "rows": 102391,
+        "users": 21413
+      },
+      "item_popularity/21-100": {
+        "GAUC": 0.6669542622203903,
+        "nDCG@5": 0.3396018344679336,
+        "primary": 0.503278048344162,
+        "rows": 18782,
+        "users": 10017
+      },
+      "user_activity/01-05": {
+        "GAUC": 0.6712388551379393,
+        "nDCG@5": 0.5334659857292676,
+        "primary": 0.6023524204336035,
+        "rows": 6305,
+        "users": 1926
+      },
+      "user_activity/06-20": {
+        "GAUC": 0.6566390077549111,
+        "nDCG@5": 0.5384238564525954,
+        "primary": 0.5975314321037533,
+        "rows": 17850,
+        "users": 5146
+      },
+      "user_activity/101+": {
+        "GAUC": 0.6814720035034104,
+        "nDCG@5": 0.4748962485789401,
+        "primary": 0.5781841260411753,
+        "rows": 25342,
+        "users": 2371
+      },
+      "user_activity/21-100": {
+        "GAUC": 0.6634253858562691,
+        "nDCG@5": 0.5456376331594215,
+        "primary": 0.6045315095078453,
+        "rows": 75412,
+        "users": 12934
+      }
+    }
+  },
+  "duration_seconds": 39.828331,
+  "encoded_fields": [
+    "user_id",
+    "video_id",
+    "author_id",
+    "tab",
+    "dur_bucket",
+    "user_activity"
+  ],
+  "environment": {
+    "code_diff_hash": "da4ecf9d848225a01c71092a6cc208842d314341ebf907ef9bc47e7d2e5d0c08",
+    "git_revision": "4c9bbba9eb00144b534c8765901fb57aac57f568",
+    "numpy": "2.2.6",
+    "python": "3.14.0"
+  },
+  "experiment_id": "E0032",
+  "global_comparison": {
+    "candidate": 0.6005904674530029,
+    "decision": "reject_or_refine",
+    "epsilon": 0.002,
+    "improvement": -0.0015682578086853027,
+    "previous_best": 0.6021587252616882,
+    "reference": "E0031"
+  },
+  "matched_comparison": {
+    "candidate": 0.6005904674530029,
+    "control": 0.6014695167541504,
+    "decision": "reject",
+    "evidence_threshold": 0.0005,
+    "improvement": -0.0008790493011474609,
+    "reference": "E0030"
+  },
+  "member_metrics": [
+    {
+      "GAUC": 0.6657450795173645,
+      "nDCG@5": 0.5354357957839966,
+      "primary": 0.6005904674530029,
+      "rows": 124909,
+      "users": 22377
+    }
+  ],
+  "metrics": {
+    "valid": {
+      "GAUC": 0.6657450795173645,
+      "nDCG@5": 0.5354357957839966,
+      "primary": 0.6005904674530029,
+      "rows": 124909,
+      "users": 22377
+    }
+  },
+  "operator": "user_activity_bucket",
+  "operator_diagnostics": {},
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "provenance": {},
+  "resources": {
+    "accelerator": "cpu_numpy",
+    "gpu_hours": 0.0,
+    "training_seconds": 39.828331
+  },
+  "rows": {
+    "train": 1141112,
+    "valid": 124909
+  },
+  "seed": 0,
+  "selection_split": "valid",
+  "spec_fingerprint": "ae8c735ae41c2594f3726a75214b81b6fd2be817a5b598539e48ce3a638731e3",
+  "stage": "features",
+  "status": "success",
+  "template": "pointwise_fm"
+}

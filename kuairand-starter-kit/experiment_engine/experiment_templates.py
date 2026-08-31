@@ -57,6 +57,7 @@ class ExperimentTemplate:
     description: str
     parameters: Mapping[str, ParameterRule]
     ensemble_members: int = 1
+    objective: str = "bpr_hybrid"
 
     def normalize_parameters(self, supplied: Mapping[str, Any]) -> dict[str, int | float]:
         unknown = sorted(set(supplied) - set(self.parameters))
@@ -85,6 +86,102 @@ _BPR_PARAMETERS = {
 
 
 TEMPLATES: dict[str, ExperimentTemplate] = {
+    "pointwise_fm": ExperimentTemplate(
+        name="pointwise_fm",
+        description=(
+            "One pointwise BCE FM matching the protected official baseline and "
+            "supporting reviewed candidate operators."
+        ),
+        parameters={
+            "embedding_dim": ParameterRule(int, 16, minimum=1, maximum=128),
+            "learning_rate": ParameterRule(float, 0.001, minimum=1e-6, maximum=0.1),
+            "l2": ParameterRule(float, 1e-6, minimum=0.0, maximum=0.1),
+            "patience": ParameterRule(int, 4, minimum=1, maximum=20),
+            "batch_size": ParameterRule(int, 8192, choices=(2048, 4096, 8192, 16384)),
+        },
+        objective="pointwise_bce",
+    ),
+    "lambdarank_fm": ExperimentTemplate(
+        name="lambdarank_fm",
+        description=(
+            "Warm-start a matched pointwise FM checkpoint and fine-tune it with "
+            "delta-nDCG@5-weighted pairwise gradients at one tenth of the base "
+            "learning rate."
+        ),
+        parameters={
+            "embedding_dim": ParameterRule(int, 16, minimum=1, maximum=128),
+            "learning_rate": ParameterRule(float, 0.001, minimum=1e-6, maximum=0.1),
+            "l2": ParameterRule(float, 1e-6, minimum=0.0, maximum=0.1),
+            "patience": ParameterRule(int, 4, minimum=1, maximum=20),
+            "batch_size": ParameterRule(int, 8192, choices=(2048, 4096, 8192, 16384)),
+        },
+        objective="lambdarank",
+    ),
+    "sequence_mlp": ExperimentTemplate(
+        name="sequence_mlp",
+        description=(
+            "Causal user-history embedding MLP. Its prior-positive-video context "
+            "is fit from earlier training dates only."
+        ),
+        parameters={
+            "embedding_dim": ParameterRule(int, 16, minimum=4, maximum=64),
+            "hidden_dim": ParameterRule(int, 32, choices=(16, 32, 64)),
+            "learning_rate": ParameterRule(float, 0.001, minimum=1e-6, maximum=0.1),
+            "l2": ParameterRule(float, 1e-6, minimum=0.0, maximum=0.1),
+            "patience": ParameterRule(int, 4, minimum=1, maximum=20),
+            "batch_size": ParameterRule(int, 8192, choices=(2048, 4096, 8192, 16384)),
+        },
+        objective="sequence_mlp",
+    ),
+    "sequence_ensemble": ExperimentTemplate(
+        name="sequence_ensemble",
+        description=(
+            "Three consecutive-seed causal sequence MLPs averaged before "
+            "validation scoring; used only after matched single-seed replication."
+        ),
+        parameters={
+            "embedding_dim": ParameterRule(int, 16, minimum=4, maximum=64),
+            "hidden_dim": ParameterRule(int, 32, choices=(16, 32, 64)),
+            "learning_rate": ParameterRule(float, 0.001, minimum=1e-6, maximum=0.1),
+            "l2": ParameterRule(float, 1e-6, minimum=0.0, maximum=0.1),
+            "patience": ParameterRule(int, 4, minimum=1, maximum=20),
+            "batch_size": ParameterRule(int, 8192, choices=(2048, 4096, 8192, 16384)),
+        },
+        ensemble_members=3,
+        objective="sequence_mlp",
+    ),
+    "causal_attention": ExperimentTemplate(
+        name="causal_attention",
+        description=(
+            "Causal fixed-length self-attention over prior positive videos, with "
+            "history fit from earlier training dates only."
+        ),
+        parameters={
+            "embedding_dim": ParameterRule(int, 16, minimum=4, maximum=64),
+            "hidden_dim": ParameterRule(int, 32, choices=(16, 32, 64)),
+            "learning_rate": ParameterRule(float, 0.001, minimum=1e-6, maximum=0.1),
+            "l2": ParameterRule(float, 1e-6, minimum=0.0, maximum=0.1),
+            "patience": ParameterRule(int, 4, minimum=1, maximum=20),
+            "batch_size": ParameterRule(int, 8192, choices=(2048, 4096, 8192, 16384)),
+        },
+        objective="causal_attention",
+    ),
+    "pointwise_ensemble": ExperimentTemplate(
+        name="pointwise_ensemble",
+        description=(
+            "Three consecutive-seed pointwise FMs averaged before validation "
+            "scoring; intended to confirm replicated feature effects."
+        ),
+        parameters={
+            "embedding_dim": ParameterRule(int, 16, minimum=1, maximum=128),
+            "learning_rate": ParameterRule(float, 0.001, minimum=1e-6, maximum=0.1),
+            "l2": ParameterRule(float, 1e-6, minimum=0.0, maximum=0.1),
+            "patience": ParameterRule(int, 4, minimum=1, maximum=20),
+            "batch_size": ParameterRule(int, 8192, choices=(2048, 4096, 8192, 16384)),
+        },
+        ensemble_members=3,
+        objective="pointwise_bce",
+    ),
     "bpr_hybrid": ExperimentTemplate(
         name="bpr_hybrid",
         description="One FM trained with within-user BPR plus auxiliary BCE.",

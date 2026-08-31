@@ -47,11 +47,14 @@ class CheckpointManager:
         )
         try:
             with os.fdopen(descriptor, "wb") as stream:
+                state = (
+                    model.checkpoint_state()
+                    if hasattr(model, "checkpoint_state")
+                    else {"V": model.V, "W": model.W, "b": np.asarray(model.b, dtype=np.float32)}
+                )
                 np.savez_compressed(
                     stream,
-                    V=model.V,
-                    W=model.W,
-                    b=np.asarray(model.b, dtype=np.float32),
+                    **state,
                 )
                 stream.flush()
                 os.fsync(stream.fileno())
@@ -76,7 +79,7 @@ class CheckpointManager:
         if not arrays_path.is_file() or not metadata_path.is_file():
             raise CheckpointError(f"checkpoint is incomplete: {directory / stem}")
         with np.load(arrays_path, allow_pickle=False) as arrays:
-            state = {name: arrays[name].copy() for name in ("V", "W", "b")}
+            state = {name: arrays[name].copy() for name in arrays.files}
         with metadata_path.open(encoding="utf-8") as stream:
             metadata = json.load(stream)
         return {"state": state, "metadata": metadata}

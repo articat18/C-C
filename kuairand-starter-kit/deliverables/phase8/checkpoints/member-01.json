@@ -1,0 +1,25 @@
+{
+  "created_at": "2026-08-31T14:56:09.436126+00:00",
+  "encoded_fields": [
+    "user_id",
+    "video_id",
+    "author_id",
+    "tab",
+    "dur_bucket",
+    "prior_positive_video"
+  ],
+  "experiment_id": "E0016",
+  "member": 1,
+  "operator": "none",
+  "seed": 1,
+  "spec_fingerprint": "0ada452904f56e71d5fecec50c4bc9d0d3f6dc140ec472f40dbb0f95017e6b5e",
+  "stage": "model",
+  "template": "sequence_ensemble",
+  "validation_metrics": {
+    "GAUC": 0.6690227389335632,
+    "nDCG@5": 0.5374853610992432,
+    "primary": 0.6032540798187256,
+    "rows": 124909,
+    "users": 22377
+  }
+}

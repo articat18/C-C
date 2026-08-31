@@ -39,6 +39,94 @@ class ExperimentSpecTests(unittest.TestCase):
         self.assertEqual(spec.operator, "video_popularity_bucket")
         self.assertEqual(spec.to_dict()["schema_version"], 2)
 
+    def test_schema_two_records_matched_control(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "stage": "features",
+            "operator": "video_popularity_bucket",
+            "evidence": "Rare and popular items have different subgroup performance.",
+            "expected_effect": "Training-only popularity improves cold-item ordering.",
+            "parameters": {},
+            "control_experiment_id": "E0030",
+        })
+        spec = ExperimentSpec.from_mapping(value)
+        self.assertEqual(spec.control_experiment_id, "E0030")
+        self.assertEqual(spec.to_dict()["control_experiment_id"], "E0030")
+
+    def test_rejects_self_as_matched_control(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "stage": "features",
+            "operator": "video_popularity_bucket",
+            "evidence": "Popularity differs.",
+            "expected_effect": "Improve ranking.",
+            "parameters": {},
+            "control_experiment_id": "E0042",
+        })
+        with self.assertRaises(SpecificationError):
+            ExperimentSpec.from_mapping(value)
+
+    def test_pointwise_template_uses_official_defaults(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "template": "pointwise_fm",
+            "stage": "training",
+            "operator": "none",
+            "evidence": "Establish a governed matched control.",
+            "expected_effect": "Reproduce the protected pointwise baseline.",
+            "parameters": {},
+        })
+        spec = ExperimentSpec.from_mapping(value)
+        self.assertEqual(spec.parameters["batch_size"], 8192)
+        self.assertEqual(spec.parameters["l2"], 1e-6)
+
+    def test_lambdarank_inherits_matched_feature_pipeline(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "template": "lambdarank_fm",
+            "stage": "loss",
+            "operator": "date_period_bucket",
+            "control_experiment_id": "E0031",
+            "evidence": "Date period passed paired replication.",
+            "expected_effect": "Improve top-five ordering from the matched checkpoint.",
+            "parameters": {},
+        })
+        spec = ExperimentSpec.from_mapping(value)
+        self.assertEqual(spec.operator, "date_period_bucket")
+        self.assertEqual(spec.control_experiment_id, "E0031")
+
+    def test_lambdarank_requires_matched_control(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "template": "lambdarank_fm",
+            "stage": "loss",
+            "operator": "none",
+            "evidence": "Ranking headroom remains.",
+            "expected_effect": "Improve nDCG at five.",
+            "parameters": {},
+        })
+        with self.assertRaisesRegex(SpecificationError, "matched pointwise control"):
+            ExperimentSpec.from_mapping(value)
+
+    def test_pointwise_ensemble_has_three_members(self):
+        value = valid_spec()
+        value.update({
+            "schema_version": 2,
+            "template": "pointwise_ensemble",
+            "stage": "features",
+            "operator": "date_period_bucket",
+            "evidence": "Date period passed paired replication.",
+            "expected_effect": "Reduce seed variance for the confirmed feature.",
+            "parameters": {},
+        })
+        spec = ExperimentSpec.from_mapping(value)
+        self.assertEqual(spec.template, "pointwise_ensemble")
+
     def test_schema_two_accepts_inverse_duplicate_frequency_operator(self):
         value = valid_spec()
         value.update({

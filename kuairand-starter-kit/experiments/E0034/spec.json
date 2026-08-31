@@ -1,0 +1,23 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "Date period and user-video exposure passed the seed-zero matched threshold and require paired replication.",
+  "expected_effect": "Reproduce pointwise performance within documented seed variation and provide a seed-one control.",
+  "experiment_id": "E0034",
+  "hypothesis": "A governed seed-one pointwise FM provides the matched control for replicated feature effects.",
+  "operator": "none",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "schema_version": 2,
+  "seed": 1,
+  "stage": "training",
+  "template": "pointwise_fm"
+}

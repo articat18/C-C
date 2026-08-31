@@ -1,0 +1,78 @@
+{
+  "best_experiment_id": "E0046",
+  "best_valid_primary": 0.6030051708221436,
+  "global_baseline_primary": 0.6016,
+  "pointwise_date_period_ensemble": {
+    "experiment_id": "E0046",
+    "member_experiment_ids": ["E0031", "E0035", "E0038"],
+    "valid_gauc": 0.6688408255577087,
+    "valid_ndcg_at_5": 0.5371695756912231,
+    "valid_primary": 0.6030051708221436,
+    "global_primary_delta": 0.001405170822143531,
+    "decision": "best_candidate_below_promotion_threshold"
+  },
+  "lambdarank": {
+    "candidate_ids": ["E0040", "E0041", "E0042"],
+    "control_ids": ["E0031", "E0035", "E0038"],
+    "matched_gauc_deltas": [
+      0.00013464689254760742,
+      -0.0001767873764038086,
+      0.0006327629089355469
+    ],
+    "matched_ndcg_at_5_deltas": [
+      -0.00006979703903198242,
+      0.0003364086151123047,
+      -0.0001958608627319336
+    ],
+    "matched_primary_deltas": [
+      0.0000324249267578125,
+      0.00007981061935424805,
+      0.00021845102310180664
+    ],
+    "mean_matched_gauc_delta": 0.00019687414169311523,
+    "mean_matched_ndcg_at_5_delta": 0.00002358357111612956,
+    "mean_matched_primary_delta": 0.00011022885640462239,
+    "positive_primary_seeds": 3,
+    "decision": "reject_below_mean_threshold"
+  },
+  "replication_rule": {
+    "minimum_mean_matched_primary_delta": 0.0005,
+    "minimum_positive_seeds": 2,
+    "seeds": [0, 1, 2]
+  },
+  "schema_version": 1,
+  "screen": {
+    "date_period_bucket": {
+      "candidate_ids": ["E0031", "E0035", "E0038"],
+      "control_ids": ["E0030", "E0034", "E0037"],
+      "matched_primary_deltas": [
+        0.0006892085075378418,
+        0.00029659271240234375,
+        0.0012788176536560059
+      ],
+      "mean_matched_primary_delta": 0.0007548729578653971,
+      "positive_seeds": 3,
+      "decision": "passes_replication"
+    },
+    "user_activity_bucket": {
+      "candidate_ids": ["E0032"],
+      "control_ids": ["E0030"],
+      "matched_primary_deltas": [-0.0008790493011474609],
+      "positive_seeds": 0,
+      "decision": "reject_after_seed_zero"
+    },
+    "user_video_exposure_bucket": {
+      "candidate_ids": ["E0033", "E0036", "E0039"],
+      "control_ids": ["E0030", "E0034", "E0037"],
+      "matched_primary_deltas": [
+        0.0005511045455932617,
+        -0.00003528594970703125,
+        0.0006103515625
+      ],
+      "mean_matched_primary_delta": 0.00037539005279541016,
+      "positive_seeds": 2,
+      "decision": "reject_below_mean_threshold"
+    }
+  },
+  "test_accessed": false
+}

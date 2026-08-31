@@ -1,0 +1,24 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "control_experiment_id": "E0035",
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "Seed-zero LambdaRank produced only a small matched gain, so the planned paired evaluation continues without changing settings.",
+  "expected_effect": "Determine whether the LambdaRank effect repeats against E0035.",
+  "experiment_id": "E0041",
+  "hypothesis": "Delta-nDCG@5-weighted fine-tuning evaluates the replicated pointwise-plus-date anchor at seed one.",
+  "operator": "date_period_bucket",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "schema_version": 2,
+  "seed": 1,
+  "stage": "loss",
+  "template": "lambdarank_fm"
+}

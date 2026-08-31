@@ -1,0 +1,23 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "The ID-free candidate reproduction reached primary 0.6014695, within 0.0001305 of the published baseline.",
+  "expected_effect": "Match all published validation metrics within 0.002 and provide the control for baseline-aligned feature experiments.",
+  "experiment_id": "E0030",
+  "hypothesis": "A governed pointwise FM reproduces the protected official validation baseline and establishes the seed-zero matched control.",
+  "operator": "none",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "training",
+  "template": "pointwise_fm"
+}

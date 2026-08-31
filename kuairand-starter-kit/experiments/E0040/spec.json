@@ -1,0 +1,24 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "control_experiment_id": "E0031",
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "Date period passed three-seed replication, while validation nDCG@5 remains below its dataset-specific oracle ceiling.",
+  "expected_effect": "Improve matched primary and nDCG@5 without a material GAUC regression relative to E0031.",
+  "experiment_id": "E0040",
+  "hypothesis": "Delta-nDCG@5-weighted pairwise fine-tuning improves the replicated pointwise-plus-date ranking anchor at seed zero.",
+  "operator": "date_period_bucket",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "loss",
+  "template": "lambdarank_fm"
+}

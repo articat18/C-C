@@ -11,6 +11,8 @@ from typing import Any
 
 from experiment_engine.experiment_spec import EXPERIMENT_ID, ExperimentSpec
 from experiment_engine.registry import ExperimentRegistry
+from experiment_engine.campaign import active_campaign
+from experiment_engine.reference_baseline import load_baseline_reference
 from experiment_boundary import assert_protected_files_unchanged, resolve_editable_path
 
 
@@ -40,6 +42,8 @@ def grant_final_approval(
 
     registry = registry or ExperimentRegistry()
     record = _successful_record(registry, experiment_id)
+    if active_campaign() is not None:
+        _require_campaign_finalist(record)
     spec_path = resolve_editable_path(Path("experiments") / experiment_id / "spec.json")
     if not spec_path.is_file():
         raise ApprovalError(f"canonical experiment specification is missing: {spec_path}")
@@ -119,6 +123,24 @@ def _successful_record(
     raise ApprovalError(f"experiment is not registered: {experiment_id}")
 
 
+def _require_campaign_finalist(record: dict[str, Any]) -> None:
+    """Require the Phase 6 replicated +epsilon finalist bar before test access."""
+    primary = float(record.get("metrics", {}).get("valid", {}).get("primary", -1.0))
+    baseline = load_baseline_reference().primary
+    if primary - baseline < 0.002:
+        raise ApprovalError("campaign finalist must improve validation primary by at least 0.002")
+    result_path = record.get("result_path")
+    if not isinstance(result_path, str):
+        raise ApprovalError("campaign finalist is missing result evidence")
+    result = resolve_editable_path(result_path)
+    try:
+        value = json.loads(result.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ApprovalError(f"could not read campaign result evidence: {exc}") from exc
+    if len(value.get("member_metrics", [])) < 3:
+        raise ApprovalError("campaign finalist requires three-seed result evidence")
+
+
 def _exclusive_json_write(path: Path, value: Any) -> None:
     try:
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
@@ -140,11 +162,15 @@ def _exclusive_json_write(path: Path, value: Any) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--campaign", help="use an isolated campaign workspace")
     parser.add_argument("experiment_id")
     parser.add_argument("--approved-by", required=True)
     parser.add_argument("--confirm", required=True)
     args = parser.parse_args()
     try:
+        if args.campaign:
+            from experiment_engine.campaign import configure_campaign
+            configure_campaign(args.campaign)
         receipt = grant_final_approval(
             args.experiment_id,
             approved_by=args.approved_by,

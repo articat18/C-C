@@ -87,6 +87,59 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertIn("validation_subgroups", result["diagnostics"])
         self.assertTrue(result["diagnostics"]["validation_subgroups"])
 
+    def test_runner_dispatches_pointwise_template_with_official_defaults(self):
+        spec = ExperimentSpec.from_mapping(
+            {
+                "schema_version": 2,
+                "experiment_id": "E0096",
+                "template": "pointwise_fm",
+                "stage": "training",
+                "operator": "none",
+                "hypothesis": "Reproduce the pointwise control.",
+                "evidence": "The protected baseline is pointwise FM.",
+                "expected_effect": "Match the protected validation score.",
+                "parameters": {},
+                "budget": {"max_epochs": 1, "max_wall_seconds": 60},
+            }
+        )
+        model = SimpleNamespace(
+            V=np.ones((4, 2), dtype=np.float32),
+            W=np.zeros(4, dtype=np.float32),
+            b=np.float32(0),
+            predict=lambda features: np.asarray([0.9, 0.1], dtype=np.float32),
+        )
+        loaded = {
+            "train": [(20220408, "u", "v1", "a", "t", 1.0, 1)],
+            "valid": [
+                (20220422, "u", "v1", "a", "t", 1.0, 1),
+                (20220422, "u", "v2", "a", "t", 1.0, 0),
+            ],
+        }
+
+        def fake_fit(splits, **kwargs):
+            self.assertEqual(splits["test"], [])
+            self.assertEqual(kwargs["batch_size"], 8192)
+            self.assertEqual(kwargs["l2"], 1e-6)
+            encoded, _ = kwargs["encode_fn"](splits)
+            return model, encoded
+
+        manager = CheckpointManager(Path(self.temporary.name) / "experiments")
+        with mock.patch(
+            "experiment_engine.experiment_runner.load", return_value=loaded
+        ), mock.patch(
+            "experiment_engine.experiment_runner.baseline_models._fit_fm_pointwise",
+            side_effect=fake_fit,
+        ) as pointwise_fit, mock.patch(
+            "experiment_engine.experiment_runner.baseline_models._fit_fm_bpr"
+        ) as bpr_fit:
+            result = run_experiment(spec, checkpoint_manager=manager, verbose=False)
+
+        pointwise_fit.assert_called_once()
+        bpr_fit.assert_not_called()
+        self.assertEqual(result["template"], "pointwise_fm")
+        self.assertEqual(result["seed"], 0)
+        self.assertEqual(result["parameters"]["batch_size"], 8192)
+
     def test_runner_applies_train_only_duplicate_weights_without_dropping_rows(self):
         spec = ExperimentSpec.from_mapping(
             {
