@@ -34,7 +34,7 @@ class SequenceFeatureTests(unittest.TestCase):
         self.assertEqual(final_history["u"][-2:], ("v1", "v2"))
 
     def test_attention_encoding_keeps_a_sealed_empty_test_split_two_dimensional(self):
-        encoded, _ = encode_attention_sequence_splits({
+        encoded, _, _ = encode_attention_sequence_splits({
             "train": [(1, "u", "v1", "a", "t", 1.0, 1)],
             "valid": [(2, "u", "v2", "a", "t", 1.0, 0)],
             "test": [],
@@ -65,7 +65,7 @@ class SequenceModelTests(unittest.TestCase):
 
     def test_attention_model_trains_and_round_trips_checkpoint_state(self):
         model = CausalAttentionRanker(
-            29, history_fields=8, embedding_dim=4, hidden_dim=4,
+            29, history_fields=8, history_offset=5, embedding_dim=4, hidden_dim=4,
             learning_rate=0.01, l2=1e-6, seed=7,
         )
         # Five official fields followed by eight position-specific history slots.
@@ -82,7 +82,7 @@ class SequenceModelTests(unittest.TestCase):
         self.assertFalse(np.allclose(before, after))
         state = {name: value.copy() for name, value in model.checkpoint_state().items()}
         restored = CausalAttentionRanker(
-            29, history_fields=8, embedding_dim=4, hidden_dim=4,
+            29, history_fields=8, history_offset=5, embedding_dim=4, hidden_dim=4,
             learning_rate=0.01, l2=1e-6, seed=99,
         )
         restored.restore(state)

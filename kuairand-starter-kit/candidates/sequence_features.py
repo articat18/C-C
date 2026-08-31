@@ -50,7 +50,7 @@ def encode_sequence_splits(
 
 def encode_attention_sequence_splits(
     splits: Splits,
-) -> tuple[dict[str, tuple[np.ndarray, np.ndarray, list[str]]], int]:
+) -> tuple[dict[str, tuple[np.ndarray, np.ndarray, list[str]]], int, int]:
     """Append eight strictly-causal positive-video positions for attention.
 
     Each position has its own field range, preserving recency position without
@@ -87,7 +87,7 @@ def encode_attention_sequence_splits(
         else:
             history_columns = np.empty((0, len(ATTENTION_HISTORY_FIELDS)), dtype=np.int32)
         output[split_name] = (np.concatenate((X, history_columns), axis=1), labels, users)
-    return output, base_dimension + len(ATTENTION_HISTORY_FIELDS) * width
+    return output, base_dimension + len(ATTENTION_HISTORY_FIELDS) * width, base_dimension
 
 
 def _training_contexts(rows: Sequence[tuple[int, str, str, str, str, float, int]]) -> tuple[list[str], dict[str, str]]:

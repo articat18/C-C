@@ -65,17 +65,15 @@ def finalize_experiment(
     submission.parent.mkdir(parents=True, exist_ok=True)
 
     splits = load(str(spec.resolved_data_dir()))
-    encoded, dimension = (
-        encode_sequence_splits(splits)
-        if get_template(spec.template).objective == "sequence_mlp"
-        else (
-            encode_attention_sequence_splits(splits)
-            if get_template(spec.template).objective == "causal_attention"
-            else encode_candidate_splits(splits, operator_name=spec.operator)
-        )
-    )
-    X_test, labels_test, users_test = encoded["test"]
     template = get_template(spec.template)
+    history_offset = None
+    if template.objective == "sequence_mlp":
+        encoded, dimension = encode_sequence_splits(splits)
+    elif template.objective == "causal_attention":
+        encoded, dimension, history_offset = encode_attention_sequence_splits(splits)
+    else:
+        encoded, dimension = encode_candidate_splits(splits, operator_name=spec.operator)
+    X_test, labels_test, users_test = encoded["test"]
     member_predictions = []
     for member in range(template.ensemble_members):
         checkpoint = checkpoint_manager.load_member(experiment_id, member)
@@ -95,7 +93,7 @@ def finalize_experiment(
                 )
             else:
                 model = CausalAttentionRanker(
-                    dimension, history_fields=len(ATTENTION_HISTORY_FIELDS),
+                    dimension, history_fields=len(ATTENTION_HISTORY_FIELDS), history_offset=int(history_offset),
                     embedding_dim=int(spec.parameters["embedding_dim"]),
                     hidden_dim=int(spec.parameters["hidden_dim"]),
                     learning_rate=float(spec.parameters["learning_rate"]),

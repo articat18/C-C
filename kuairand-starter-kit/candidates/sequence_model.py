@@ -110,12 +110,12 @@ def fit_sequence_mlp(splits, *, embedding_dim: int, hidden_dim: int, learning_ra
 class CausalAttentionRanker(CausalSequenceMLP):
     """Causal item-history attention ranker with a compact NumPy training loop."""
 
-    def __init__(self, dimension: int, *, history_fields: int, embedding_dim: int,
+    def __init__(self, dimension: int, *, history_fields: int, history_offset: int, embedding_dim: int,
                  hidden_dim: int, learning_rate: float, l2: float, seed: int) -> None:
         self.history_fields = history_fields
-        self.base_fields = 5
-        self.history_width = (dimension - self.base_fields) // history_fields
-        if self.base_fields + self.history_width * history_fields != dimension:
+        self.history_offset = history_offset
+        self.history_width = (dimension - history_offset) // history_fields
+        if history_offset + self.history_width * history_fields != dimension:
             raise ValueError("attention history encoding has incompatible field ranges")
         super().__init__(dimension, embedding_dim=embedding_dim, hidden_dim=hidden_dim,
                          learning_rate=learning_rate, l2=l2, seed=seed)
@@ -126,7 +126,7 @@ class CausalAttentionRanker(CausalSequenceMLP):
         history = self.E[history_X]
         scale = np.float32(np.sqrt(self.E.shape[1]))
         scores = (history * base[:, None, :]).sum(axis=2) / scale
-        none_ids = self.base_fields + np.arange(self.history_fields) * self.history_width
+        none_ids = self.history_offset + np.arange(self.history_fields) * self.history_width
         mask = history_X != none_ids[None, :]
         # The first ID in each slot range represents NONE.  All-NONE contexts
         # use zero attention context, avoiding an arbitrary padding embedding.
@@ -191,12 +191,12 @@ class CausalAttentionRanker(CausalSequenceMLP):
 def fit_causal_attention(splits, *, embedding_dim: int, hidden_dim: int, learning_rate: float,
                          l2: float, epochs: int, patience: int, batch_size: int, seed: int,
                          encode_fn, verbose: bool):
-    encoded, dimension = encode_fn(splits)
+    encoded, dimension, history_offset = encode_fn(splits)
     X_train, y_train, _ = encoded["train"]
     X_valid, y_valid, users_valid = encoded["valid"]
     from candidates.sequence_features import ATTENTION_HISTORY_FIELDS
     model = CausalAttentionRanker(
-        dimension, history_fields=len(ATTENTION_HISTORY_FIELDS), embedding_dim=embedding_dim,
+        dimension, history_fields=len(ATTENTION_HISTORY_FIELDS), history_offset=history_offset, embedding_dim=embedding_dim,
         hidden_dim=hidden_dim, learning_rate=learning_rate, l2=l2, seed=seed,
     )
     rng = np.random.default_rng(seed)
