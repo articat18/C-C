@@ -82,6 +82,7 @@ class AutonomousResearchAgent:
                     "expected_effect": proposal.expected_effect,
                     "parameters": proposal.parameters,
                     "seed": proposal.seed,
+                    "control_experiment_id": proposal.control_experiment_id,
                 },
                 "proposal_provenance": dict(proposal.provenance),
             }
@@ -133,8 +134,11 @@ def _reflect(execution: dict[str, Any]) -> dict[str, Any]:
     result = execution["result"]
     comparison = result.get("comparison", {})
     controller_decision = comparison.get("decision", "reject_or_refine")
+    matched = result.get("matched_comparison", {})
     if controller_decision == "keep":
         outcome = "keep"
+    elif matched.get("decision") == "promising":
+        outcome = "refine"
     elif result.get("operator", "none") != "none":
         outcome = "change_direction"
     else:
@@ -152,6 +156,8 @@ def _reflect(execution: dict[str, Any]) -> dict[str, Any]:
         "decision": outcome,
         "candidate_primary": comparison.get("candidate"),
         "improvement": comparison.get("improvement"),
+        "matched_improvement": matched.get("improvement"),
+        "matched_decision": matched.get("decision"),
         "weakest_validation_subgroups": weakest,
         "test_accessed": False,
     }

@@ -40,11 +40,11 @@ class FinalizationTests(unittest.TestCase):
             return (self.root / path).resolve()
         return path
 
-    def _registered_spec(self, *, operator="none"):
+    def _registered_spec(self, *, operator="none", template="bpr_hybrid"):
         value = {
                 "schema_version": 1,
                 "experiment_id": "E0077",
-                "template": "bpr_hybrid",
+                "template": template,
                 "hypothesis": "Verify human-gated finalization.",
                 "budget": {"max_epochs": 1, "max_wall_seconds": 60},
         }
@@ -207,6 +207,57 @@ class FinalizationTests(unittest.TestCase):
                 checkpoint_manager=checkpoints,
             )
 
+        self.assertEqual(result["status"], "finalized")
+        self.assertTrue(submission.is_file())
+
+    def test_pointwise_experiment_can_be_finalized_without_popularity_parameter(self):
+        spec = self._registered_spec(template="pointwise_fm")
+        splits = {
+            "train": [
+                (20220408, "u", "v1", "a", "t", 1000.0, 1),
+                (20220408, "u", "v2", "a", "t", 2000.0, 0),
+            ],
+            "valid": [],
+            "test": [
+                (20220429, "u", "v1", "a", "t", 1000.0, 1),
+                (20220429, "u", "v2", "a", "t", 2000.0, 0),
+            ],
+        }
+        _, dimension = encode_candidate_splits(splits, operator_name="none")
+        model = baseline.FM(dimension, k=16, seed=0)
+        checkpoints = CheckpointManager(self.root / "experiments")
+        checkpoints.save_member(
+            spec.experiment_id,
+            0,
+            model=model,
+            metadata={"spec_fingerprint": spec.fingerprint()},
+        )
+        with mock.patch(
+            "experiment_engine.approval.resolve_editable_path",
+            side_effect=self._sandbox_path,
+        ):
+            grant_final_approval(
+                spec.experiment_id,
+                approved_by="teammate",
+                confirmation=APPROVAL_PHRASE,
+                registry=self.registry,
+            )
+        submission = self.root / "runs" / "E0077" / "pointwise-submission.csv"
+        with mock.patch(
+            "experiment_engine.finalize.resolve_editable_path",
+            side_effect=self._sandbox_path,
+        ), mock.patch(
+            "experiment_engine.approval.resolve_editable_path",
+            side_effect=self._sandbox_path,
+        ), mock.patch(
+            "experiment_engine.finalize.load", return_value=splits
+        ):
+            result = finalize_experiment(
+                spec.experiment_id,
+                submission_path=submission,
+                registry=self.registry,
+                checkpoint_manager=checkpoints,
+            )
         self.assertEqual(result["status"], "finalized")
         self.assertTrue(submission.is_file())
 

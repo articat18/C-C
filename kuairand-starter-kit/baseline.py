@@ -50,13 +50,30 @@ class FM:
     def logits(self, X):
         E = self.V[X]                                   # (B,F,k)
         S = E.sum(1)                                    # (B,k)
-        inter = 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
+        # Keep the exact protected-baseline arithmetic order.  Equivalent
+        # formulations can perturb near-zero sparse gradients enough for Adam
+        # to take a different first-step direction.
+        inter = 0.5 * (
+            np.einsum("ij,ij->i", S, S)
+            - np.einsum("ijk,ijk->i", E, E)
+        )
         return self.b + self.W[X].sum(1) + inter, E, S
 
-    def step(self, X, y):
+    def step(self, X, y, sample_weights=None):
         B = len(y)
         z, E, S = self.logits(X)
-        g = ((sigmoid(z) - y) / B).astype(np.float32)    # (B,)
+        probabilities = sigmoid(z)
+        if sample_weights is None:
+            g = ((probabilities - y) / B).astype(np.float32)
+            normalized_weights = np.full(B, 1.0 / B, dtype=np.float32)
+        else:
+            normalized_weights = np.asarray(sample_weights, dtype=np.float32)
+            if normalized_weights.shape != (B,):
+                raise ValueError('sample_weights must align one-to-one with the batch')
+            if not np.all(np.isfinite(normalized_weights)) or np.any(normalized_weights <= 0):
+                raise ValueError('sample_weights must contain finite positive values')
+            normalized_weights = normalized_weights / normalized_weights.sum()
+            g = ((probabilities - y) * normalized_weights).astype(np.float32)
         gV = np.zeros_like(self.V); gW = np.zeros_like(self.W)
         np.add.at(gW, X, g[:, None])
         np.add.at(gV, X, g[:, None, None] * (S[:, None, :] - E))
@@ -68,12 +85,14 @@ class FM:
             Vv *= b2; Vv += (1 - b2) * (G * G)
             P -= self.lr * (M / (1 - b1 ** self.t)) / (np.sqrt(Vv / (1 - b2 ** self.t)) + eps)
         self.b -= self.lr * g.sum()
-        return float(-np.mean(y * np.log(sigmoid(z) + 1e-9) + (1 - y) * np.log(1 - sigmoid(z) + 1e-9)))
+        row_losses = -(y * np.log(probabilities + 1e-9) + (1 - y) * np.log(1 - probabilities + 1e-9))
+        return float(np.sum(normalized_weights * row_losses))
 
     def predict(self, X, bs=200_000):
         return np.concatenate([self.logits(X[i:i + bs])[0] for i in range(0, len(X), bs)])
 
-    def step_bpr_hybrid(self, Xp, Xn, Xbce=None, ybce=None, bpr_weight=1.0, bce_weight=0.15):
+    def step_bpr_hybrid(self, Xp, Xn, Xbce=None, ybce=None, bpr_weight=1.0,
+                        bce_weight=0.15, pair_weights=None):
         n_pairs = len(Xp)
         gV = np.zeros_like(self.V); gW = np.zeros_like(self.W); gb = np.float32(0.0)
         loss_bpr = np.float32(0.0)
@@ -82,8 +101,21 @@ class FM:
             zn, En, Sn = self.logits(Xn)
             diff = zp - zn
             sig_diff = sigmoid(diff)
-            g = ((sig_diff - 1.0) * bpr_weight / n_pairs).astype(np.float32)
-            loss_bpr = -np.mean(np.log(sig_diff + 1e-9))
+            if pair_weights is None:
+                g = ((sig_diff - 1.0) * bpr_weight / n_pairs).astype(np.float32)
+                loss_bpr = -np.mean(np.log(sig_diff + 1e-9))
+            else:
+                normalized_pair_weights = np.asarray(pair_weights, dtype=np.float32)
+                if normalized_pair_weights.shape != (n_pairs,):
+                    raise ValueError('pair_weights must align one-to-one with ranking pairs')
+                if not np.all(np.isfinite(normalized_pair_weights)) or np.any(normalized_pair_weights < 0):
+                    raise ValueError('pair_weights must contain finite non-negative values')
+                total_pair_weight = normalized_pair_weights.sum()
+                if total_pair_weight <= 0:
+                    raise ValueError('pair_weights must contain positive total weight')
+                normalized_pair_weights = normalized_pair_weights / total_pair_weight
+                g = ((sig_diff - 1.0) * bpr_weight * normalized_pair_weights).astype(np.float32)
+                loss_bpr = -np.sum(normalized_pair_weights * np.log(sig_diff + 1e-9))
             np.add.at(gW, Xp, g[:, None])
             np.add.at(gV, Xp, g[:, None, None] * (Sp[:, None, :] - Ep))
             gb += g.sum()
@@ -120,6 +152,56 @@ def _group_users(users, ytr):
             u2neg[u].append(i)
     valid_u = [u for u in u2pos if u in u2neg and len(u2pos[u]) > 0 and len(u2neg[u]) > 0]
     return u2pos, u2neg, valid_u
+
+
+def _fit_fm_pointwise(splits, k=16, lr=0.001, epochs=40, batch_size=8192,
+                      patience=4, seed=0, verbose=True, l2=1e-6,
+                      encode_fn=encode, train_sample_weights=None):
+    """Fit the reproducible pointwise FM through a candidate encoder.
+
+    With the default encoder and no sample weights this mirrors the protected
+    official implementation while allowing reviewed operators to be evaluated
+    without modifying that reference file.
+    """
+
+    enc, dim = encode_fn(splits)
+    Xtr, ytr, _ = enc['train']
+    Xva, yva, uva = enc['valid']
+    if train_sample_weights is not None:
+        train_sample_weights = np.asarray(train_sample_weights, dtype=np.float64)
+        if train_sample_weights.shape != (len(ytr),):
+            raise ValueError('train_sample_weights must align one-to-one with training rows')
+        if not np.all(np.isfinite(train_sample_weights)) or np.any(train_sample_weights <= 0):
+            raise ValueError('train_sample_weights must contain finite positive values')
+    model = FM(dim, k=k, lr=lr, l2=l2, seed=seed)
+    rng = np.random.default_rng(seed)
+    best, best_state, bad = -1, None, 0
+    for epoch in range(1, epochs + 1):
+        started = time.time()
+        indices = rng.permutation(len(ytr))
+        losses = []
+        for offset in range(0, len(indices), batch_size):
+            batch = indices[offset:offset + batch_size]
+            weights = None if train_sample_weights is None else train_sample_weights[batch]
+            losses.append(model.step(Xtr[batch], ytr[batch], weights))
+        valid = evaluate(uva, yva, model.predict(Xva))
+        if verbose:
+            print(
+                f"  epoch {epoch:2d} | loss {np.mean(losses):.4f} | "
+                f"valid GAUC {valid['GAUC']:.4f} nDCG@5 {valid['nDCG@5']:.4f} "
+                f"primary {valid['primary']:.4f} | {time.time() - started:.1f}s"
+            )
+        if valid['primary'] > best + 1e-5:
+            best, bad = valid['primary'], 0
+            best_state = (model.V.copy(), model.W.copy(), np.float32(model.b))
+        else:
+            bad += 1
+            if bad >= patience:
+                if verbose:
+                    print(f"  early stop at epoch {epoch}")
+                break
+    model.V, model.W, model.b = best_state
+    return model, enc
 
 def _fit_fm_bpr(splits, k=16, lr=0.001, epochs=40, patience=4, seed=0, verbose=True,
                 neg_per_pos=4, bpr_weight=1.0, bce_weight=0.1, l2=1e-5,
@@ -190,6 +272,117 @@ def _fit_fm_bpr(splits, k=16, lr=0.001, epochs=40, patience=4, seed=0, verbose=T
                 break
     m.V, m.W, m.b = best_state
     return m, enc
+
+
+def _fit_fm_lambdarank(splits, initial_state, k=16, lr=0.001, epochs=40,
+                       patience=4, seed=0, verbose=True, l2=1e-6,
+                       encode_fn=encode, train_sample_weights=None):
+    """Fine-tune a matched pointwise checkpoint with delta-nDCG@5 lambdas."""
+
+    enc, dim = encode_fn(splits)
+    Xtr, ytr, utr = enc['train']
+    Xva, yva, uva = enc['valid']
+    model = FM(dim, k=k, lr=lr, l2=l2, seed=seed)
+    if initial_state['V'].shape != model.V.shape or initial_state['W'].shape != model.W.shape:
+        raise ValueError('matched control checkpoint has incompatible shapes')
+    model.V = np.asarray(initial_state['V'], dtype=np.float32).copy()
+    model.W = np.asarray(initial_state['W'], dtype=np.float32).copy()
+    model.b = np.float32(initial_state['b'])
+    if train_sample_weights is not None:
+        raise ValueError('LambdaRank does not support cleaning sample weights')
+
+    rng = np.random.default_rng(seed)
+    u2pos, u2neg, valid_u = _group_users(utr, ytr)
+    initial = evaluate(uva, yva, model.predict(Xva))
+    best = initial['primary']
+    best_state = (model.V.copy(), model.W.copy(), np.float32(model.b))
+    bad = 0
+    for epoch in range(1, epochs + 1):
+        started = time.time()
+        row_gains = _lambda_row_gains(model.predict(Xtr), u2pos, u2neg)
+        losses = []
+        for _ in range(200):
+            positives, negatives, weights = [], [], []
+            bce_rows = []
+            sampled_users = rng.choice(
+                valid_u, size=min(512, len(valid_u)), replace=False
+            )
+            for user in sampled_users:
+                positive_pool, negative_pool = u2pos[user], u2neg[user]
+                pair_count = min(len(positive_pool), 4)
+                positive = rng.choice(
+                    positive_pool, size=pair_count,
+                    replace=pair_count > len(positive_pool),
+                )
+                negative = rng.choice(
+                    negative_pool, size=pair_count,
+                    replace=pair_count > len(negative_pool),
+                )
+                for pos, neg in zip(positive, negative):
+                    weight = abs(row_gains[pos] - row_gains[neg])
+                    if weight > 0:
+                        positives.append(pos)
+                        negatives.append(neg)
+                        weights.append(weight)
+                bce_rows.extend(positive.tolist())
+                bce_rows.extend(negative.tolist())
+                if len(positives) >= 4096:
+                    break
+            if not positives:
+                continue
+            positives = positives[:4096]
+            negatives = negatives[:4096]
+            weights = weights[:4096]
+            if bce_rows:
+                bce_rows = rng.choice(
+                    bce_rows, size=min(2048, len(bce_rows)), replace=False
+                )
+                Xbce, ybce = Xtr[bce_rows], ytr[bce_rows]
+            else:
+                Xbce, ybce = None, None
+            losses.append(model.step_bpr_hybrid(
+                Xtr[positives], Xtr[negatives], Xbce, ybce,
+                bpr_weight=1.0, bce_weight=0.1, pair_weights=weights,
+            ))
+        valid = evaluate(uva, yva, model.predict(Xva))
+        if verbose:
+            print(
+                f"  lambda epoch {epoch:2d} | loss {np.mean(losses):.4f} | "
+                f"valid GAUC {valid['GAUC']:.4f} nDCG@5 {valid['nDCG@5']:.4f} "
+                f"primary {valid['primary']:.4f} | {time.time() - started:.1f}s"
+            )
+        if valid['primary'] > best + 1e-5:
+            best, bad = valid['primary'], 0
+            best_state = (model.V.copy(), model.W.copy(), np.float32(model.b))
+        else:
+            bad += 1
+            if bad >= patience:
+                if verbose:
+                    print(f"  early stop at lambda epoch {epoch}")
+                break
+    model.V, model.W, model.b = best_state
+    return model, enc
+
+
+def _lambda_row_gains(scores, u2pos, u2neg, k=5):
+    """Return each row's normalized nDCG discount at its current user rank."""
+
+    gains = np.zeros(len(scores), dtype=np.float32)
+    discounts = np.asarray(
+        [1.0 / np.log2(rank + 2.0) for rank in range(k)], dtype=np.float32
+    )
+    for user, positives in u2pos.items():
+        negatives = u2neg.get(user, [])
+        if not positives or not negatives:
+            continue
+        rows = positives + negatives
+        order = sorted(rows, key=lambda index: (-float(scores[index]), index))
+        ideal = float(discounts[:min(k, len(positives))].sum())
+        if ideal <= 0:
+            continue
+        for rank, index in enumerate(order[:k]):
+            gains[index] = discounts[rank] / ideal
+    return gains
 
 
 def _sample_pool(rng, pool, size, sample_weights=None):

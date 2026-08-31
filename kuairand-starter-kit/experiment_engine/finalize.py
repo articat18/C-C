@@ -92,7 +92,7 @@ def finalize_experiment(
         member_predictions.append(model.predict(X_test))
 
     scores = baseline_models._standardize(np.mean(member_predictions, axis=0))
-    popularity_weight = float(spec.parameters["popularity_weight"])
+    popularity_weight = float(spec.parameters.get("popularity_weight", 0.0))
     if popularity_weight:
         popularity = baseline_models._standardize(
             baseline_models._pop_scores(splits["train"], splits["test"])

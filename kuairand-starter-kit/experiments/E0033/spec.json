@@ -1,0 +1,24 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "control_experiment_id": "E0030",
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "The data contains repeated user-video interactions, and the prior BPR exposure experiment showed a positive local delta.",
+  "expected_effect": "Improve validation primary by at least 0.0005 against the identical E0030 control.",
+  "experiment_id": "E0033",
+  "hypothesis": "A causal prior user-video exposure bucket improves pointwise FM ranking for repeated interactions.",
+  "operator": "user_video_exposure_bucket",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "features",
+  "template": "pointwise_fm"
+}

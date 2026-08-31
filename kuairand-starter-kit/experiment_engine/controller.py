@@ -76,6 +76,10 @@ class ExperimentController:
                         result = run_experiment(spec, verbose=verbose)
                     comparison = self._compare_with_history(result)
                     result["comparison"] = comparison
+                    result["global_comparison"] = comparison
+                    matched_comparison = self._matched_comparison(spec, result)
+                    if matched_comparison is not None:
+                        result["matched_comparison"] = matched_comparison
                     _atomic_json_write(result_path, result)
                     record = {
                         "experiment_id": spec.experiment_id,
@@ -83,6 +87,14 @@ class ExperimentController:
                         "template": spec.template,
                         "stage": spec.stage,
                         "operator": spec.operator,
+                        "seed": spec.seed,
+                        "parameters": dict(spec.parameters),
+                        "budget": {
+                            "max_epochs": spec.budget.max_epochs,
+                            "max_wall_seconds": spec.budget.max_wall_seconds,
+                        },
+                        "data_dir": spec.data_dir,
+                        "control_experiment_id": spec.control_experiment_id,
                         "provenance": dict(spec.provenance or {}),
                         "spec_fingerprint": spec.fingerprint(),
                         "hypothesis": spec.hypothesis,
@@ -93,6 +105,11 @@ class ExperimentController:
                         "metrics": result["metrics"],
                         "diagnostics": result.get("diagnostics", {}),
                         "comparison": comparison,
+                        "global_comparison": comparison,
+                        **(
+                            {"matched_comparison": matched_comparison}
+                            if matched_comparison is not None else {}
+                        ),
                         "result_path": result_path.relative_to(
                             resolve_editable_path("experiments").parent
                         ).as_posix(),
@@ -139,6 +156,7 @@ class ExperimentController:
         evidence: str | None = None,
         expected_effect: str | None = None,
         provenance: Mapping[str, Any] | None = None,
+        control_experiment_id: str | None = None,
     ) -> tuple[ExperimentSpec, Path]:
         """Reserve an ID and write a validated template specification."""
 
@@ -181,6 +199,10 @@ class ExperimentController:
                     "evidence": evidence or hypothesis,
                     "expected_effect": expected_effect or hypothesis,
                     **({"provenance": dict(provenance)} if provenance else {}),
+                    **(
+                        {"control_experiment_id": control_experiment_id}
+                        if control_experiment_id else {}
+                    ),
                 }
             )
             run_directory = experiments_root / experiment_id
@@ -304,6 +326,7 @@ class ExperimentController:
             raise ControllerError(
                 f"experiment_id is already registered: {spec.experiment_id}"
             )
+        self._validated_control(spec, records)
         scores = [
             float(record["metrics"]["valid"]["primary"])
             for record in self._records_since_resume(records)
@@ -336,6 +359,80 @@ class ExperimentController:
                 if improvement > CONVERGENCE_EPSILON
                 else "reject_or_refine"
             ),
+        }
+
+    def _validated_control(
+        self,
+        spec: ExperimentSpec,
+        records: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
+        if spec.control_experiment_id is None:
+            return None
+        records = records if records is not None else list(self.registry.records())
+        control = next(
+            (
+                record for record in records
+                if record.get("experiment_id") == spec.control_experiment_id
+            ),
+            None,
+        )
+        if control is None or control.get("status") != "success":
+            raise ControllerError(
+                f"matched control is not a successful registered experiment: "
+                f"{spec.control_experiment_id}"
+            )
+        expected = {
+            "seed": spec.seed,
+            "parameters": dict(spec.parameters),
+            "budget": {
+                "max_epochs": spec.budget.max_epochs,
+                "max_wall_seconds": spec.budget.max_wall_seconds,
+            },
+            "data_dir": spec.data_dir,
+        }
+        mismatches = [
+            name for name, value in expected.items() if control.get(name) != value
+        ]
+        if mismatches:
+            raise ControllerError(
+                "matched control differs in immutable experiment settings: "
+                + ", ".join(mismatches)
+            )
+        objective_comparison = (
+            spec.template == "lambdarank_fm"
+            and control.get("template") == "pointwise_fm"
+            and spec.stage == "loss"
+            and control.get("operator", "none") == spec.operator
+        )
+        feature_comparison = (
+            control.get("template") == spec.template
+            and control.get("operator", "none") == "none"
+            and spec.operator != "none"
+        )
+        if not objective_comparison and not feature_comparison:
+            raise ControllerError(
+                "matched controls must compare one feature against an operator-none "
+                "control or LambdaRank against the same pointwise pipeline"
+            )
+        return control
+
+    def _matched_comparison(
+        self, spec: ExperimentSpec, result: Mapping[str, Any]
+    ) -> dict[str, Any] | None:
+        control = self._validated_control(spec)
+        if control is None:
+            return None
+        candidate = float(result["metrics"]["valid"]["primary"])
+        reference = float(control["metrics"]["valid"]["primary"])
+        improvement = candidate - reference
+        evidence_threshold = 0.0005
+        return {
+            "reference": spec.control_experiment_id,
+            "control": reference,
+            "candidate": candidate,
+            "improvement": improvement,
+            "evidence_threshold": evidence_threshold,
+            "decision": "promising" if improvement >= evidence_threshold else "reject",
         }
 
 
@@ -412,6 +509,7 @@ def main() -> int:
     create_parser.add_argument("--operator", default="none")
     create_parser.add_argument("--evidence")
     create_parser.add_argument("--expected-effect")
+    create_parser.add_argument("--control-experiment-id")
     continue_parser = subparsers.add_parser(
         "continue", help="open a new research window after convergence"
     )
@@ -434,6 +532,7 @@ def main() -> int:
                 operator=args.operator,
                 evidence=args.evidence,
                 expected_effect=args.expected_effect,
+                control_experiment_id=args.control_experiment_id,
             )
             output = {
                 "experiment_id": spec.experiment_id,

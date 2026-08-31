@@ -341,9 +341,26 @@ from the append-only registry and decision evidence.
 
 ### Phase 5: Advanced ranking
 
+- Establish a governed pointwise-FM candidate that reproduces the protected
+  baseline and supports the reviewed feature pipeline.
+- Evaluate Phase 4 feature signals against explicit matched pointwise controls
+  before increasing objective complexity. Preserve the global promotion
+  comparison separately from the matched component comparison.
+- **Complete:** E0030 reproduced the protected pointwise baseline. The
+  E0031/E0035/E0038 date-period experiments were positive against paired
+  controls in all three seeds with mean primary delta `+0.000755`. User activity
+  and user-video exposure did not meet the replication rule, so no feature
+  composite is currently justified.
 - Add LambdaRank only if diagnostics show weak top-five ordering.
-- Add recent-history or attention models only after simpler affinity features demonstrate value.
-- Add multitask or watch-time modeling only after the deterministic research loop is mature.
+- **Evaluated, not advanced:** E0040–E0042 warm-started the three replicated
+  date-period checkpoints and applied delta-nDCG@5-weighted fine-tuning. Mean
+  matched primary delta was `+0.000110` and mean matched nDCG@5 delta was
+  `+0.000024`, below the replication threshold.
+- **Phase closeout / best candidate:** E0046 is the three-seed pointwise date-period
+  ensemble. It reached validation primary `0.603005` (`+0.001405` over the
+  published baseline) without accessing test data, but remains below the
+  `+0.002` promotion threshold. Close this phase without finalization; retain
+  the unused global budget for a separately governed autonomy campaign.
 
 ### Phase 6: Optional multi-agent expansion
 
@@ -358,6 +375,7 @@ The orchestrator remains the only owner of experiment state, budgets, convergenc
 
 ## Immediate Milestone
 
-Phases 0 through 4 are complete. The immediate milestone is Phase 5: evaluate
-advanced ranking objectives only where the Phase 4 validation and subgroup
-evidence justifies their added complexity.
+Phases 0 through 5 are complete. The immediate milestone is Phase 6: extend
+the governed workflow from approved templates to research-backed, sandboxed
+candidate patches while preserving the validation-only and human-finalization
+boundaries.

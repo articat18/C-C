@@ -36,12 +36,13 @@ class ExperimentProposal:
     parameters: dict[str, int | float]
     seed: int = 0
     provenance: dict[str, Any] = field(default_factory=dict, compare=False)
+    control_experiment_id: str | None = None
 
 
 def proposal_to_dict(proposal: ExperimentProposal) -> dict[str, Any]:
     """Return the executable proposal fields, excluding transport metadata."""
 
-    return {
+    value = {
         "template": proposal.template,
         "stage": proposal.stage,
         "operator": proposal.operator,
@@ -51,6 +52,9 @@ def proposal_to_dict(proposal: ExperimentProposal) -> dict[str, Any]:
         "parameters": dict(proposal.parameters),
         "seed": proposal.seed,
     }
+    if proposal.control_experiment_id is not None:
+        value["control_experiment_id"] = proposal.control_experiment_id
+    return value
 
 
 def proposal_fingerprint(proposal: ExperimentProposal) -> str:
@@ -139,7 +143,7 @@ def parse_proposal(value: str | Mapping[str, Any]) -> ExperimentProposal:
         raise ValueError("proposal must be a JSON object")
     allowed = {
         "template", "stage", "operator", "hypothesis", "evidence",
-        "expected_effect", "parameters", "seed",
+        "expected_effect", "parameters", "seed", "control_experiment_id",
     }
     unknown = sorted(set(value) - allowed)
     if unknown:
@@ -185,6 +189,10 @@ def parse_proposal(value: str | Mapping[str, Any]) -> ExperimentProposal:
             "expected_effect": expected_effect,
             "parameters": dict(normalized),
             "seed": seed,
+            **(
+                {"control_experiment_id": value.get("control_experiment_id")}
+                if value.get("control_experiment_id") is not None else {}
+            ),
         })
     except ValueError as exc:
         raise ValueError(f"proposal violates the experiment contract: {exc}") from exc
@@ -197,6 +205,7 @@ def parse_proposal(value: str | Mapping[str, Any]) -> ExperimentProposal:
         expected_effect=validated.expected_effect,
         parameters=dict(validated.parameters),
         seed=validated.seed,
+        control_experiment_id=validated.control_experiment_id,
     )
 
 
@@ -237,6 +246,7 @@ class GeminiProposalClient:
                 "expected_effect": "string",
                 "parameters": "object",
                 "seed": "integer",
+                "control_experiment_id": "optional experiment ID for a matched operator control",
             },
             "context": dict(context),
         }

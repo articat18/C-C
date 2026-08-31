@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 from typing import Any, Mapping
 
-from candidates.feature_pipeline import validate_pipeline_selection
+from candidates.feature_pipeline import OPERATORS, validate_pipeline_selection
 from experiment_engine.experiment_templates import get_template
 from experiment_boundary import MAX_WALL_SECONDS, REPOSITORY_ROOT
 
@@ -33,6 +33,7 @@ V2_TOP_LEVEL_FIELDS = V1_TOP_LEVEL_FIELDS | {
     "evidence",
     "expected_effect",
     "provenance",
+    "control_experiment_id",
 }
 MAX_EPOCHS = 40
 
@@ -45,6 +46,7 @@ PARAMETER_STAGES = {
     "l2": "training",
     "patience": "training",
     "negatives_per_positive": "training",
+    "batch_size": "training",
 }
 
 
@@ -97,6 +99,7 @@ class ExperimentSpec:
     evidence: str = ""
     expected_effect: str = ""
     provenance: Mapping[str, Any] | None = None
+    control_experiment_id: str | None = None
 
     @classmethod
     def from_mapping(cls, value: Any) -> "ExperimentSpec":
@@ -164,7 +167,14 @@ class ExperimentSpec:
             if not isinstance(stage, str) or not isinstance(operator, str):
                 raise SpecificationError("stage and operator must be strings")
             try:
-                validate_pipeline_selection(stage, operator)
+                if template_name == "lambdarank_fm" and stage == "loss":
+                    if operator not in OPERATORS:
+                        raise ValueError(
+                            f"unknown inherited operator {operator!r}; "
+                            f"choose one of {sorted(OPERATORS)}"
+                        )
+                else:
+                    validate_pipeline_selection(stage, operator)
             except ValueError as exc:
                 raise SpecificationError(str(exc)) from exc
             for field_name, field_value in (
@@ -181,6 +191,20 @@ class ExperimentSpec:
             expected_effect = expected_effect.strip()
             _validate_one_change(template_name, parameters, stage, operator)
         provenance = _validate_provenance(value.get("provenance"))
+        control_experiment_id = value.get("control_experiment_id")
+        if control_experiment_id is not None and (
+            not isinstance(control_experiment_id, str)
+            or not EXPERIMENT_ID.fullmatch(control_experiment_id)
+        ):
+            raise SpecificationError(
+                "control_experiment_id must match E followed by 4-8 digits or be null"
+            )
+        if control_experiment_id == experiment_id:
+            raise SpecificationError("an experiment cannot control itself")
+        if template_name == "lambdarank_fm" and control_experiment_id is None:
+            raise SpecificationError(
+                "lambdarank_fm requires a matched pointwise control experiment"
+            )
         data_dir = value.get("data_dir", "./KuaiRand-Pure/data")
         if not isinstance(data_dir, str) or not data_dir.strip():
             raise SpecificationError("data_dir must be a non-empty string")
@@ -199,6 +223,7 @@ class ExperimentSpec:
             evidence=evidence,
             expected_effect=expected_effect,
             provenance=provenance,
+            control_experiment_id=control_experiment_id,
         )
 
     @classmethod
@@ -233,6 +258,8 @@ class ExperimentSpec:
             })
             if self.provenance is not None:
                 value["provenance"] = dict(self.provenance)
+            if self.control_experiment_id is not None:
+                value["control_experiment_id"] = self.control_experiment_id
         return value
 
     def fingerprint(self) -> str:

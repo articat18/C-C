@@ -71,6 +71,7 @@ class ExperimentControllerTests(unittest.TestCase):
             result = controller.run(spec, verbose=False)
 
         self.assertEqual(result["comparison"]["decision"], "reject_or_refine")
+        self.assertEqual(result["global_comparison"], result["comparison"])
         self.assertEqual(
             result["comparison"]["reference"], "stable_published_baseline"
         )
@@ -128,6 +129,93 @@ class ExperimentControllerTests(unittest.TestCase):
         self.assertAlmostEqual(status["baseline_valid_primary"], 0.6016)
         self.assertAlmostEqual(status["best_valid_primary"], 0.6016)
         self.assertIsNone(status["best_candidate_decision"])
+
+    def test_matched_comparison_requires_identical_control_settings(self):
+        registry = ExperimentRegistry(self.root / "index.jsonl")
+        controller = ExperimentController(registry)
+        control_parameters = {
+            "embedding_dim": 16,
+            "learning_rate": 0.001,
+            "l2": 1e-6,
+            "patience": 4,
+            "batch_size": 8192,
+        }
+        registry.append({
+            "experiment_id": "E0030",
+            "status": "success",
+            "template": "pointwise_fm",
+            "stage": "training",
+            "operator": "none",
+            "seed": 0,
+            "parameters": control_parameters,
+            "budget": {"max_epochs": 40, "max_wall_seconds": 21600},
+            "data_dir": "./KuaiRand-Pure/data",
+            "metrics": {"valid": {"primary": 0.6015}},
+        })
+        spec = ExperimentSpec.from_mapping({
+            "schema_version": 2,
+            "experiment_id": "E0031",
+            "template": "pointwise_fm",
+            "stage": "features",
+            "operator": "date_period_bucket",
+            "control_experiment_id": "E0030",
+            "hypothesis": "Add date periods.",
+            "evidence": "Temporal drift is material.",
+            "expected_effect": "Improve ranking over a matched pointwise control.",
+            "parameters": {},
+        })
+        comparison = controller._matched_comparison(
+            spec, {"metrics": {"valid": {"primary": 0.6021}}}
+        )
+        self.assertEqual(comparison["reference"], "E0030")
+        self.assertAlmostEqual(comparison["improvement"], 0.0006)
+        self.assertEqual(comparison["decision"], "promising")
+
+        mismatched = ExperimentSpec.from_mapping({
+            **spec.to_dict(),
+            "experiment_id": "E0032",
+            "seed": 1,
+        })
+        with self.assertRaisesRegex(Exception, "seed"):
+            controller._validated_control(mismatched)
+
+    def test_lambdarank_can_use_same_pipeline_pointwise_control(self):
+        registry = ExperimentRegistry(self.root / "lambda-index.jsonl")
+        controller = ExperimentController(registry)
+        parameters = {
+            "embedding_dim": 16,
+            "learning_rate": 0.001,
+            "l2": 1e-6,
+            "patience": 4,
+            "batch_size": 8192,
+        }
+        registry.append({
+            "experiment_id": "E0031",
+            "status": "success",
+            "template": "pointwise_fm",
+            "stage": "features",
+            "operator": "date_period_bucket",
+            "seed": 0,
+            "parameters": parameters,
+            "budget": {"max_epochs": 40, "max_wall_seconds": 21600},
+            "data_dir": "./KuaiRand-Pure/data",
+            "metrics": {"valid": {"primary": 0.6021}},
+        })
+        spec = ExperimentSpec.from_mapping({
+            "schema_version": 2,
+            "experiment_id": "E0040",
+            "template": "lambdarank_fm",
+            "stage": "loss",
+            "operator": "date_period_bucket",
+            "control_experiment_id": "E0031",
+            "hypothesis": "Fine-tune the matched pointwise model.",
+            "evidence": "Top-five ordering has headroom.",
+            "expected_effect": "Improve primary through weighted pairs.",
+            "parameters": {},
+        })
+        self.assertEqual(
+            controller._validated_control(spec)["experiment_id"], "E0031"
+        )
 
 
 if __name__ == "__main__":

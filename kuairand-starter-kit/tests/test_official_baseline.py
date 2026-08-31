@@ -2,10 +2,37 @@ import unittest
 
 import numpy as np
 
+from baseline import FM as CandidateFM, _lambda_row_gains
 from official_baseline import OfficialFM
 
 
 class OfficialFMLogitsRegressionTests(unittest.TestCase):
+    def test_lambda_row_gains_focus_on_top_five_swaps(self):
+        scores = np.asarray([0.9, 0.8, 0.7, 0.6, 0.5, 0.4], dtype=np.float32)
+        gains = _lambda_row_gains(
+            scores,
+            {"u": [0, 5]},
+            {"u": [1, 2, 3, 4]},
+        )
+        self.assertGreater(gains[0], gains[1])
+        self.assertEqual(gains[5], 0.0)
+        self.assertEqual(gains.shape, scores.shape)
+
+    def test_candidate_pointwise_step_exactly_matches_protected_optimizer(self):
+        candidate = CandidateFM(dim=9, k=4, lr=0.001, l2=1e-6, seed=3)
+        protected = OfficialFM(dim=9, k=4, lr=0.001, l2=1e-6, seed=3)
+        features = np.asarray(
+            [[0, 1, 2], [3, 4, 5], [0, 5, 8], [2, 6, 7]], dtype=np.int32
+        )
+        labels = np.asarray([1, 0, 1, 0], dtype=np.float32)
+
+        candidate.step(features, labels)
+        protected.step(features, labels)
+
+        np.testing.assert_array_equal(candidate.V, protected.V)
+        np.testing.assert_array_equal(candidate.W, protected.W)
+        self.assertEqual(candidate.b, protected.b)
+
     def test_logits_match_direct_formula_without_mutating_model(self):
         model = OfficialFM(dim=7, k=3, seed=11)
         model.W[:] = np.linspace(-0.2, 0.3, len(model.W), dtype=np.float32)
@@ -57,4 +84,3 @@ class OfficialFMLogitsRegressionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

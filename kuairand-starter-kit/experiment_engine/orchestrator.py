@@ -83,6 +83,7 @@ class ResearchOrchestrator:
             evidence=proposal.evidence,
             expected_effect=proposal.expected_effect,
             provenance=provenance,
+            control_experiment_id=proposal.control_experiment_id,
         )
         result = self.controller.run(spec, verbose=verbose)
         return {"spec_path": str(path), "result": result}

@@ -73,7 +73,7 @@ def run_experiment(
     del loaded
 
     parameters = dict(spec.parameters)
-    popularity_weight = float(parameters.pop("popularity_weight"))
+    popularity_weight = float(parameters.pop("popularity_weight", 0.0))
     encode_fn = lambda candidate_splits: encode_candidate_splits(
         candidate_splits, operator_name=spec.operator
     )
@@ -92,21 +92,49 @@ def run_experiment(
                 f"[{spec.experiment_id}] member {member + 1}/"
                 f"{template.ensemble_members}, seed={member_seed}"
             )
-        model, encoded = baseline_models._fit_fm_bpr(
-            splits,
-            k=int(parameters["embedding_dim"]),
-            lr=float(parameters["learning_rate"]),
-            epochs=spec.budget.max_epochs,
-            patience=int(parameters["patience"]),
-            seed=member_seed,
-            verbose=verbose,
-            neg_per_pos=int(parameters["negatives_per_positive"]),
-            bpr_weight=float(parameters["bpr_weight"]),
-            bce_weight=float(parameters["bce_weight"]),
-            l2=float(parameters["l2"]),
-            encode_fn=encode_fn,
-            train_sample_weights=sample_weights,
-        )
+        common = {
+            "splits": splits,
+            "k": int(parameters["embedding_dim"]),
+            "lr": float(parameters["learning_rate"]),
+            "epochs": spec.budget.max_epochs,
+            "patience": int(parameters["patience"]),
+            "seed": member_seed,
+            "verbose": verbose,
+            "l2": float(parameters["l2"]),
+            "encode_fn": encode_fn,
+            "train_sample_weights": sample_weights,
+        }
+        if template.objective == "pointwise_bce":
+            model, encoded = baseline_models._fit_fm_pointwise(
+                **common,
+                batch_size=int(parameters["batch_size"]),
+            )
+        elif template.objective == "lambdarank":
+            if spec.control_experiment_id is None:
+                raise ValueError("LambdaRank requires a matched control checkpoint")
+            control_checkpoint = checkpoint_manager.load_member(
+                spec.control_experiment_id, member
+            )
+            control_metadata = control_checkpoint["metadata"]
+            if control_metadata.get("experiment_id") != spec.control_experiment_id:
+                raise ValueError("matched control checkpoint metadata is inconsistent")
+            if control_metadata.get("encoded_fields") != list(
+                encoded_field_names(spec.operator)
+            ):
+                raise ValueError("matched control checkpoint uses a different feature pipeline")
+            lambda_common = dict(common)
+            lambda_common["lr"] = float(lambda_common["lr"]) * 0.1
+            model, encoded = baseline_models._fit_fm_lambdarank(
+                **lambda_common,
+                initial_state=control_checkpoint["state"],
+            )
+        else:
+            model, encoded = baseline_models._fit_fm_bpr(
+                **common,
+                neg_per_pos=int(parameters["negatives_per_positive"]),
+                bpr_weight=float(parameters["bpr_weight"]),
+                bce_weight=float(parameters["bce_weight"]),
+            )
         X_valid, valid_labels, valid_users = encoded["valid"]
         predictions = model.predict(X_valid)
         metrics = evaluate(valid_users, valid_labels, predictions)
@@ -147,6 +175,13 @@ def run_experiment(
         "experiment_id": spec.experiment_id,
         "spec_fingerprint": spec.fingerprint(),
         "template": spec.template,
+        "objective": template.objective,
+        "objective_diagnostics": (
+            {"fine_tune_learning_rate": float(spec.parameters["learning_rate"]) * 0.1}
+            if template.objective == "lambdarank" else {}
+        ),
+        "seed": spec.seed,
+        "parameters": dict(spec.parameters),
         "stage": spec.stage,
         "operator": spec.operator,
         "encoded_fields": list(encoded_field_names(spec.operator)),

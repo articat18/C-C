@@ -10,6 +10,7 @@ from typing import Any
 from candidates.feature_pipeline import PIPELINE_STAGES, operator_contracts
 from experiment_engine.controller import ExperimentController
 from experiment_engine.registry import ExperimentRegistry
+from experiment_engine.experiment_templates import TEMPLATES
 
 
 def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
@@ -24,6 +25,7 @@ def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
             "template": record.get("template"),
             "hypothesis": record.get("hypothesis"),
             "comparison": record.get("comparison", {}),
+            "matched_comparison": record.get("matched_comparison", {}),
         }
         if record.get("status") == "success":
             item["metrics"] = {"valid": record.get("metrics", {}).get("valid", {})}
@@ -34,6 +36,7 @@ def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
             item["parameters"] = spec.get("parameters", {})
             item["stage"] = spec.get("stage")
             item["operator"] = spec.get("operator")
+            item["control_experiment_id"] = spec.get("control_experiment_id")
         experiments.append(item)
     continuation_path = Path("experiments/research_windows.jsonl")
     continuations = []
@@ -44,7 +47,7 @@ def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
     diagnostics_path = Path("analysis/dataset-profile.json")
     diagnostics = json.loads(diagnostics_path.read_text(encoding="utf-8")) if diagnostics_path.is_file() else {}
     return {
-        "phase": 4,
+        "phase": 5,
         "baseline": {"primary": controller.baseline.primary, "name": controller.baseline.name},
         "status": controller.status(),
         "experiments": experiments,
@@ -55,7 +58,7 @@ def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
             "test_accessed": False,
             "approved_stages": list(PIPELINE_STAGES),
             "approved_operators": operator_contracts(),
-            "approved_templates": ["bpr_hybrid", "bpr_ensemble"],
+            "approved_templates": sorted(TEMPLATES),
             "one_change_per_iteration": True,
             "instruction": "Choose one evidence-backed operator or scalar change; do not repeat exhausted BPR settings without justification.",
         },

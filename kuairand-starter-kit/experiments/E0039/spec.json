@@ -1,0 +1,24 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "control_experiment_id": "E0037",
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "Exposure was positive at seed zero and neutral-to-negative at seed one, requiring the planned third paired seed.",
+  "expected_effect": "Determine whether exposure is positive in two of three seeds with mean matched gain of at least 0.0005.",
+  "experiment_id": "E0039",
+  "hypothesis": "The user-video exposure feature completes its paired three-seed evaluation.",
+  "operator": "user_video_exposure_bucket",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "schema_version": 2,
+  "seed": 2,
+  "stage": "features",
+  "template": "pointwise_fm"
+}

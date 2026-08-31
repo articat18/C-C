@@ -1,0 +1,24 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "control_experiment_id": "E0034",
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "E0031 improved primary by 0.000689 against its seed-zero control.",
+  "expected_effect": "Produce a positive matched primary delta against E0034.",
+  "experiment_id": "E0035",
+  "hypothesis": "The date-period feature repeats its positive matched effect at seed one.",
+  "operator": "date_period_bucket",
+  "parameters": {
+    "batch_size": 8192,
+    "embedding_dim": 16,
+    "l2": 1e-06,
+    "learning_rate": 0.001,
+    "patience": 4
+  },
+  "schema_version": 2,
+  "seed": 1,
+  "stage": "features",
+  "template": "pointwise_fm"
+}

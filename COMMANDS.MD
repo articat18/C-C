@@ -35,22 +35,23 @@ Inspect the current experiment-loop status:
 python3 -m experiment_engine.controller status
 ```
 
-The current workspace has one completed experiment (`E0001`). Status is
-baseline-aware even though E0001's older registry record predates that logic:
+At Phase 5 closeout, the workspace's best validation-only result is E0046.
+The exact numbers are a snapshot; use `status` rather than treating them as a
+future campaign target:
 
 ```json
 {
   "baseline_valid_primary": 0.6016,
   "best_candidate_decision": "reject_or_refine",
-  "best_candidate_improvement": -0.0035498825073242424,
-  "best_candidate_primary": 0.5980501174926758,
-  "best_source": "stable_published_baseline",
-  "best_valid_primary": 0.6016,
+  "best_candidate_improvement": 0.001405170822143531,
+  "best_candidate_primary": 0.6030051708221436,
+  "best_source": "E0046",
+  "best_valid_primary": 0.6030051708221436,
   "converged": false,
-  "failed": 0,
-  "iterations": 1,
-  "remaining_iterations": 49,
-  "successful": 1
+  "failed": 1,
+  "iterations": 45,
+  "remaining_iterations": 5,
+  "successful": 44
 }
 ```
 
@@ -294,10 +295,33 @@ Initially approved templates:
 
 | Template | Behavior |
 |---|---|
+| `pointwise_fm` | Reproduces the official-style pointwise FM and accepts reviewed feature operators |
+| `pointwise_ensemble` | Averages three consecutive-seed pointwise FMs for confirmed feature effects |
+| `lambdarank_fm` | Warm-starts a matched pointwise checkpoint and applies delta-nDCG@5 pairwise fine-tuning |
 | `bpr_hybrid` | Trains one FM with within-user BPR and auxiliary BCE |
 | `bpr_ensemble` | Trains three consecutive-seed BPR FMs and combines their scores |
 
 Specifications cannot contain shell commands, Python source, module paths, or unknown parameters. The engine rejects anything outside the approved schema and template catalog.
+
+Phase 5 feature experiments identify an explicit successful pointwise control.
+The controller rejects controls with a different template, seed, parameter set,
+budget, or data path:
+
+```bash
+python3 -m experiment_engine.controller create \
+  --template pointwise_fm \
+  --stage features \
+  --operator date_period_bucket \
+  --control-experiment-id E0030 \
+  --hypothesis "A date-period feature improves the matched pointwise FM." \
+  --evidence "The validation split has material temporal drift." \
+  --expected-effect "Positive primary delta against E0030."
+```
+
+The existing `comparison` and `global_comparison` fields remain promotion-facing
+and use the protected published baseline. `matched_comparison` reports the
+component effect against the named control; a delta of at least `0.0005` is
+marked `promising` for seed replication, not automatically promoted.
 
 ## 10. Output locations
 
