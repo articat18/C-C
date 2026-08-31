@@ -12,9 +12,13 @@ from agent.context import build_agent_context
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--campaign", help="use an isolated campaign workspace")
     parser.add_argument("--context", type=Path)
     parser.add_argument("--output-patch", type=Path, required=True)
     args = parser.parse_args()
+    if args.campaign:
+        from experiment_engine.campaign import configure_campaign
+        configure_campaign(args.campaign)
     context = (
         json.loads(args.context.read_text(encoding="utf-8"))
         if args.context

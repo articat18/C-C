@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,8 @@ from candidates.feature_pipeline import PIPELINE_STAGES, operator_contracts
 from experiment_engine.controller import ExperimentController
 from experiment_engine.registry import ExperimentRegistry
 from experiment_engine.experiment_templates import TEMPLATES
+from experiment_boundary import resolve_editable_path
+from agent.research import available_sources
 
 
 def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
@@ -29,7 +32,9 @@ def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
         }
         if record.get("status") == "success":
             item["metrics"] = {"valid": record.get("metrics", {}).get("valid", {})}
-        spec_path = Path("experiments") / str(record.get("experiment_id")) / "spec.json"
+        spec_path = resolve_editable_path(
+            Path("experiments") / str(record.get("experiment_id")) / "spec.json"
+        )
         if spec_path.is_file():
             spec = json.loads(spec_path.read_text(encoding="utf-8"))
             item["seed"] = spec.get("seed")
@@ -38,21 +43,22 @@ def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
             item["operator"] = spec.get("operator")
             item["control_experiment_id"] = spec.get("control_experiment_id")
         experiments.append(item)
-    continuation_path = Path("experiments/research_windows.jsonl")
+    continuation_path = resolve_editable_path("experiments/research_windows.jsonl")
     continuations = []
     if continuation_path.is_file():
         for line in continuation_path.read_text(encoding="utf-8").splitlines()[-limit:]:
             if line.strip():
                 continuations.append(json.loads(line))
-    diagnostics_path = Path("analysis/dataset-profile.json")
+    diagnostics_path = resolve_editable_path("analysis/dataset-profile.json")
     diagnostics = json.loads(diagnostics_path.read_text(encoding="utf-8")) if diagnostics_path.is_file() else {}
     return {
-        "phase": 5,
+        "phase": 6 if os.environ.get("AUTOML_CAMPAIGN") else 5,
         "baseline": {"primary": controller.baseline.primary, "name": controller.baseline.name},
         "status": controller.status(),
         "experiments": experiments,
         "continuations": continuations,
         "diagnostics": diagnostics,
+        "research_sources": available_sources(),
         "constraints": {
             "selection_split": "valid",
             "test_accessed": False,

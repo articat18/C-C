@@ -233,10 +233,14 @@ def _float(value: Any) -> float:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--campaign", help="write output into an isolated campaign workspace")
     parser.add_argument("command", choices=("profile",))
     parser.add_argument("--data-dir", default="./KuaiRand-Pure/data")
     parser.add_argument("--output", default="analysis/dataset-profile.json")
     args = parser.parse_args()
+    if args.campaign:
+        from experiment_engine.campaign import configure_campaign
+        configure_campaign(args.campaign)
     if args.command == "profile":
         splits = load(args.data_dir, split_names=("train", "valid"))
         report = profile_dataset(splits)

@@ -172,11 +172,15 @@ def _append_decision(decision: dict[str, Any]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--campaign", help="use an isolated campaign workspace")
     parser.add_argument("--context", type=Path, help="optional context JSON; defaults to live project context")
     parser.add_argument("--max-steps", type=int, default=1)
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--auto-continue", action="store_true")
     args = parser.parse_args()
+    if args.campaign:
+        from experiment_engine.campaign import configure_campaign
+        configure_campaign(args.campaign)
     context = (
         json.loads(args.context.read_text(encoding="utf-8"))
         if args.context

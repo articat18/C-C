@@ -302,6 +302,16 @@ The project follows the phases in the repository-level `ARCHITECTURE.md`:
 | Phase 5: advanced ranking | Complete (E0046: 0.603005 validation primary; no test access) |
 | Phase 6: task-completion campaign | Planned (single-agent research, sandboxed patches, sustained validation gains) |
 
+Phase 6 uses a separate `campaigns/phase6/` workspace, preserving the completed
+Phase 5 registry. Initialize it with `python3 -m experiment_engine.controller
+--campaign phase6 init-campaign`. All campaign commands require the same
+`--campaign phase6` flag. The agent records immutable live research-source
+artifacts before proposing an experiment; fetched material is reference-only and
+cannot supply executable instructions. Only sandbox-verified patches with
+successful validation evidence can be auto-promoted. Final test access remains
+human-gated and additionally requires a three-seed candidate at least `+0.002`
+above the official validation primary.
+
 Gemini proposals now use the schema-version-2 contract and can choose one
 reviewed cleaning or feature operator, or one scalar change across loss, model,
 and training stages. Fingerprinted sandboxed candidate patches are supported by

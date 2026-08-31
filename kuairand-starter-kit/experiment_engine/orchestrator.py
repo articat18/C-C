@@ -13,6 +13,8 @@ from typing import Any
 from experiment_engine.controller import ControllerError, ExperimentController
 from experiment_engine.phase3 import plan_phase3, run_phase3
 from agent.proposal import ExperimentProposal, proposal_fingerprint
+from agent.research import validate_source_ids
+from experiment_engine.campaign import active_campaign
 
 
 class ResearchOrchestrator:
@@ -71,6 +73,8 @@ class ResearchOrchestrator:
     ) -> dict[str, Any]:
         """Materialize one validated proposal and execute it through the controller."""
         provenance = dict(proposal.provenance)
+        if active_campaign():
+            provenance["research_sources"] = validate_source_ids(proposal.research_source_ids)
         provenance["proposal_fingerprint"] = proposal_fingerprint(proposal)
         provenance["manual_interventions"] = manual_interventions
         spec, path = self.controller.create(
@@ -91,11 +95,15 @@ class ResearchOrchestrator:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--campaign", help="use an isolated campaign workspace")
     parser.add_argument("--max-runs", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--auto-continue", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
+    if args.campaign:
+        from experiment_engine.campaign import configure_campaign
+        configure_campaign(args.campaign)
     summary = ResearchOrchestrator().run(
         max_runs=args.max_runs,
         seed=args.seed,

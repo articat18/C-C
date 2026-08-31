@@ -37,6 +37,7 @@ class ExperimentProposal:
     seed: int = 0
     provenance: dict[str, Any] = field(default_factory=dict, compare=False)
     control_experiment_id: str | None = None
+    research_source_ids: tuple[str, ...] = ()
 
 
 def proposal_to_dict(proposal: ExperimentProposal) -> dict[str, Any]:
@@ -54,6 +55,8 @@ def proposal_to_dict(proposal: ExperimentProposal) -> dict[str, Any]:
     }
     if proposal.control_experiment_id is not None:
         value["control_experiment_id"] = proposal.control_experiment_id
+    if proposal.research_source_ids:
+        value["research_source_ids"] = list(proposal.research_source_ids)
     return value
 
 
@@ -143,7 +146,7 @@ def parse_proposal(value: str | Mapping[str, Any]) -> ExperimentProposal:
         raise ValueError("proposal must be a JSON object")
     allowed = {
         "template", "stage", "operator", "hypothesis", "evidence",
-        "expected_effect", "parameters", "seed", "control_experiment_id",
+        "expected_effect", "parameters", "seed", "control_experiment_id", "research_source_ids",
     }
     unknown = sorted(set(value) - allowed)
     if unknown:
@@ -177,6 +180,9 @@ def parse_proposal(value: str | Mapping[str, Any]) -> ExperimentProposal:
     seed = value.get("seed", 0)
     if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= 2**32 - 1:
         raise ValueError("proposal.seed must be an integer between 0 and 2^32-1")
+    source_ids = value.get("research_source_ids", [])
+    if not isinstance(source_ids, list) or any(not isinstance(item, str) or not item for item in source_ids):
+        raise ValueError("proposal.research_source_ids must be an array of non-empty strings")
     try:
         validated = ExperimentSpec.from_mapping({
             "schema_version": 2,
@@ -206,6 +212,7 @@ def parse_proposal(value: str | Mapping[str, Any]) -> ExperimentProposal:
         parameters=dict(validated.parameters),
         seed=validated.seed,
         control_experiment_id=validated.control_experiment_id,
+        research_source_ids=tuple(source_ids),
     )
 
 
@@ -227,7 +234,7 @@ class GeminiProposalClient:
             for name in sorted(TEMPLATES)
         }
         prompt = {
-            "task": "Propose one evidence-backed Phase 4 experiment for the governed AutoML engine.",
+            "task": "Propose one evidence-backed governed AutoML experiment.",
             "allowed_stages": list(PIPELINE_STAGES),
             "allowed_templates": allowed_parameters,
             "allowed_operators": operator_contracts(),
@@ -247,6 +254,7 @@ class GeminiProposalClient:
                 "parameters": "object",
                 "seed": "integer",
                 "control_experiment_id": "optional experiment ID for a matched operator control",
+                "research_source_ids": "required non-empty array when context.phase is 6; choose only IDs from context.research_sources",
             },
             "context": dict(context),
         }

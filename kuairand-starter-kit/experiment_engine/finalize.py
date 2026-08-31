@@ -138,6 +138,7 @@ def _atomic_submission_write(path: Path, rows: list[Any], scores: np.ndarray) ->
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--campaign", help="use an isolated campaign workspace")
     parser.add_argument("experiment_id")
     parser.add_argument(
         "--submission",
@@ -145,6 +146,9 @@ def main() -> int:
     )
     args = parser.parse_args()
     try:
+        if args.campaign:
+            from experiment_engine.campaign import configure_campaign
+            configure_campaign(args.campaign)
         result = finalize_experiment(
             args.experiment_id, submission_path=args.submission
         )

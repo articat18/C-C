@@ -23,6 +23,36 @@ Run the complete test suite:
 python3 -m unittest discover -s tests -v
 ```
 
+## Phase 6 campaign commands
+
+Phase 6 is isolated from the historical Phase 5 registry. Initialize it once;
+all following commands use `--campaign phase6`, which scopes analysis,
+experiments, decisions, approvals, and submissions to `campaigns/phase6/`.
+
+```bash
+python3 -m experiment_engine.controller --campaign phase6 init-campaign
+python3 -m experiment_engine.reproduce_baseline --campaign phase6 \
+  --output runs/baseline-reproduction.json
+python3 -m experiment_engine.diagnostics --campaign phase6 profile
+python3 -m experiment_engine.controller --campaign phase6 status
+python3 -m agent.research --campaign phase6 --query "sequential recommendation ranking" --rows 5
+python3 -m agent.autonomous --campaign phase6 --max-steps 3 --execute
+```
+
+Every Phase 6 proposal must cite saved `S-...` evidence IDs. Candidate patches
+may be promoted without a per-patch human confirmation only after the sandbox
+report passes all checks and its attached experiment clears the validation
+success rule:
+
+```bash
+python3 -m agent.candidate_patch --campaign phase6 PATCH_ARTIFACT \
+  --promote-report PATCH_REPORT --auto-promote
+```
+
+Finalization stays human-gated. The approval command rejects any campaign
+candidate without three-seed evidence and a validation-primary improvement of at
+least `+0.002` over the protected baseline.
+
 Verify that protected baseline, data, evaluation, and published-score files have not changed:
 
 ```bash

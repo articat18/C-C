@@ -19,6 +19,7 @@ from experiment_engine.orchestrator import ResearchOrchestrator
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--campaign", help="use an isolated campaign workspace")
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--context", type=Path, help="JSON diagnostics/registry context")
     source.add_argument(
@@ -35,6 +36,9 @@ def main() -> int:
     )
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
+    if args.campaign:
+        from experiment_engine.campaign import configure_campaign
+        configure_campaign(args.campaign)
     if args.output_proposal and args.execute:
         parser.error("--output-proposal cannot be combined with --execute")
     if args.output_proposal and args.proposal:

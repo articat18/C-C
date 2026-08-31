@@ -90,6 +90,7 @@ def reproduce(data_dir: str, *, verbose: bool = True) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--campaign", help="write output into an isolated campaign workspace")
     parser.add_argument("--data-dir", default="./KuaiRand-Pure/data")
     parser.add_argument(
         "--output",
@@ -97,6 +98,9 @@ def main() -> int:
     )
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
+    if args.campaign:
+        from experiment_engine.campaign import configure_campaign
+        configure_campaign(args.campaign)
     result = reproduce(args.data_dir, verbose=not args.quiet)
     if args.output:
         output = resolve_editable_path(args.output)

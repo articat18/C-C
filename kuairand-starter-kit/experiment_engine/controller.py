@@ -23,6 +23,7 @@ from experiment_engine.experiment_spec import (
 from experiment_engine.experiment_templates import TEMPLATES, TemplateValidationError
 from experiment_engine.reference_baseline import load_baseline_reference
 from experiment_engine.registry import ExperimentRegistry, RegistryError
+from experiment_engine.campaign import active_campaign
 from experiment_boundary import (
     CONVERGENCE_EPSILON,
     CONVERGENCE_PATIENCE,
@@ -159,6 +160,20 @@ class ExperimentController:
         control_experiment_id: str | None = None,
     ) -> tuple[ExperimentSpec, Path]:
         """Reserve an ID and write a validated template specification."""
+
+        if active_campaign() is not None:
+            from experiment_engine.campaign import campaign_root
+            if not (campaign_root() / "campaign.json").is_file():
+                raise ControllerError("campaign must be initialized before reserving experiments")
+            from agent.research import validate_source_ids
+            supplied_sources = dict(provenance or {}).get("research_sources", [])
+            if not isinstance(supplied_sources, list):
+                raise ControllerError("campaign provenance requires a research_sources list")
+            validated_sources = validate_source_ids([
+                str(item.get("source_id", "")) if isinstance(item, Mapping) else ""
+                for item in supplied_sources
+            ])
+            provenance = {**dict(provenance or {}), "research_sources": validated_sources}
 
         experiments_root = resolve_editable_path("experiments")
         experiments_root.mkdir(parents=True, exist_ok=True)
@@ -493,6 +508,10 @@ def _exclusive_json_write(path: Path, value: Any) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--campaign",
+        help="use an isolated campaign workspace under campaigns/<name>/",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     run_parser = subparsers.add_parser("run", help="run one approved experiment")
     run_parser.add_argument("spec", help="path to a JSON experiment specification")
@@ -510,20 +529,39 @@ def main() -> int:
     create_parser.add_argument("--evidence")
     create_parser.add_argument("--expected-effect")
     create_parser.add_argument("--control-experiment-id")
+    create_parser.add_argument(
+        "--research-source-id", action="append", default=[],
+        help="saved S-... evidence ID (required for campaign experiments)",
+    )
     continue_parser = subparsers.add_parser(
         "continue", help="open a new research window after convergence"
     )
     continue_parser.add_argument("--reason", required=True)
     subparsers.add_parser("status", help="show experiment-loop status")
+    subparsers.add_parser("init-campaign", help="initialize the selected Phase 6 campaign")
     args = parser.parse_args()
 
-    controller = ExperimentController()
     try:
+        if args.campaign:
+            from experiment_engine.campaign import configure_campaign
+            configure_campaign(args.campaign)
+        if args.command == "init-campaign":
+            if not args.campaign:
+                raise ControllerError("init-campaign requires --campaign")
+            from experiment_engine.campaign import initialize_campaign
+            output = initialize_campaign(args.campaign)
+            print(json.dumps(output, sort_keys=True, indent=2))
+            return 0
+        controller = ExperimentController()
         if args.command == "run":
             spec_path = resolve_editable_path(args.spec)
             spec = ExperimentSpec.load(spec_path)
             output = controller.run(spec, verbose=not args.quiet)
         elif args.command == "create":
+            provenance = None
+            if args.research_source_id:
+                from agent.research import validate_source_ids
+                provenance = {"research_sources": validate_source_ids(args.research_source_id)}
             spec, path = controller.create(
                 args.template,
                 args.hypothesis,
@@ -532,6 +570,7 @@ def main() -> int:
                 operator=args.operator,
                 evidence=args.evidence,
                 expected_effect=args.expected_effect,
+                provenance=provenance,
                 control_experiment_id=args.control_experiment_id,
             )
             output = {
