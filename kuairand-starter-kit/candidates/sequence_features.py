@@ -75,14 +75,17 @@ def encode_attention_sequence_splits(
             for row in rows
         ]
         X, labels, users = encoded[split_name]
-        history_columns = np.asarray(
-            [
-                [base_dimension + position * width + vocabulary.get(value, unknown)
-                 for position, value in enumerate(context)]
-                for context in contexts
-            ],
-            dtype=np.int32,
-        )
+        if contexts:
+            history_columns = np.asarray(
+                [
+                    [base_dimension + position * width + vocabulary.get(value, unknown)
+                     for position, value in enumerate(context)]
+                    for context in contexts
+                ],
+                dtype=np.int32,
+            )
+        else:
+            history_columns = np.empty((0, len(ATTENTION_HISTORY_FIELDS)), dtype=np.int32)
         output[split_name] = (np.concatenate((X, history_columns), axis=1), labels, users)
     return output, base_dimension + len(ATTENTION_HISTORY_FIELDS) * width
 

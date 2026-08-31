@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from candidates.sequence_features import ATTENTION_HISTORY_FIELDS, NONE_TOKEN, _training_contexts, _training_history_windows
+from candidates.sequence_features import ATTENTION_HISTORY_FIELDS, NONE_TOKEN, _training_contexts, _training_history_windows, encode_attention_sequence_splits
 from candidates.sequence_model import CausalAttentionRanker, CausalSequenceMLP
 from experiment_engine.experiment_templates import get_template
 
@@ -32,6 +32,14 @@ class SequenceFeatureTests(unittest.TestCase):
         self.assertEqual(contexts[1], (NONE_TOKEN,) * len(ATTENTION_HISTORY_FIELDS))
         self.assertEqual(contexts[2][-2:], ("v1", "v2"))
         self.assertEqual(final_history["u"][-2:], ("v1", "v2"))
+
+    def test_attention_encoding_keeps_a_sealed_empty_test_split_two_dimensional(self):
+        encoded, _ = encode_attention_sequence_splits({
+            "train": [(1, "u", "v1", "a", "t", 1.0, 1)],
+            "valid": [(2, "u", "v2", "a", "t", 1.0, 0)],
+            "test": [],
+        })
+        self.assertEqual(encoded["test"][0].shape, (0, 13))
 
 
 class SequenceModelTests(unittest.TestCase):
