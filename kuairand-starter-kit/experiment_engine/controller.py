@@ -6,6 +6,7 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
+import hashlib
 import os
 from pathlib import Path
 import signal
@@ -571,7 +572,19 @@ def main() -> int:
             provenance = None
             if args.research_source_id:
                 from agent.research import validate_source_ids
-                provenance = {"research_sources": validate_source_ids(args.research_source_id)}
+                sources = validate_source_ids(args.research_source_id)
+                fingerprint_input = json.dumps({
+                    "template": args.template, "hypothesis": args.hypothesis,
+                    "seed": args.seed, "sources": [item["source_id"] for item in sources],
+                }, sort_keys=True, separators=(",", ":")).encode("utf-8")
+                provenance = {
+                    "proposal_fingerprint": hashlib.sha256(fingerprint_input).hexdigest(),
+                    "context_fingerprint": None,
+                    "source_model": "manual_campaign_control",
+                    "token_usage": {},
+                    "manual_interventions": 1,
+                    "research_sources": sources,
+                }
             spec, path = controller.create(
                 args.template,
                 args.hypothesis,
