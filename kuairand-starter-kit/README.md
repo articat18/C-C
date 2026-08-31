@@ -168,8 +168,8 @@ python3 -m agent.autonomous --max-steps 3 --execute
 
 Phase 3's strongest candidates were re-run with `--seed 1` and `--seed 2`; none
 exceeded the protected baseline. All selection remains validation-only; test
-evaluation still requires a separate human approval receipt. Phase 4 is now the
-next milestone.
+evaluation still requires a separate human approval receipt. Phase 4 is
+complete; Phase 5 advanced ranking is now the active milestone.
 
 ### Phase 4 governed operator workflow
 
@@ -296,14 +296,30 @@ The project follows the phases in the repository-level `ARCHITECTURE.md`:
 | Phase 2: EDA and subgroup diagnostics | Complete |
 | Phase 3: first bounded research cycle | Complete (best candidate 0.60114; baseline 0.6016) |
 | Phase 4: governed full-stack autonomy | Complete (reviewed operators, sandboxed patches, recovery, reflection, and audit evidence) |
-| Phase 5: advanced ranking | Planned |
+| Phase 5: advanced ranking | Active (begin with diagnostic-gated LambdaRank evaluation) |
 | Phase 6: optional multi-agent expansion | Deferred |
 
 Gemini proposals now use the schema-version-2 contract and can choose one
 reviewed cleaning or feature operator, or one scalar change across loss, model,
-and training stages. Sandboxed candidate-code generation remains deferred until
-the reviewed operator loop is reliable. See the repository-level
-`ARCHITECTURE.MD` for its safety gates and completion criteria.
+and training stages. Fingerprinted sandboxed candidate patches are supported by
+the governed Phase 4 workflow. See the repository-level `ARCHITECTURE.MD` for
+its safety gates and completion criteria.
+
+### Phase 5 starting point
+
+Phase 5 begins by measuring whether top-five ordering has enough remaining
+headroom to justify a more complex ranking objective. The published validation
+`nDCG@5` is `0.5357`; because users with no positive validation impression
+receive zero under the official evaluator, the dataset-specific oracle ceiling
+is `0.69679`, leaving `0.16109` absolute headroom. The best recorded candidate
+reached only `0.535956` and did not improve the protected primary score.
+
+The first bounded Phase 5 direction is therefore a matched LambdaRank
+experiment: hold features, seed, model capacity, and training budget fixed while
+replacing the BPR ranking objective with delta-`nDCG@5`-weighted pairwise
+gradients. Recent-history or attention models remain gated on simpler affinity
+features demonstrating value, and multitask or watch-time modeling remains a
+later direction.
 
 Run the deterministic Phase 2 dataset profile with:
 
