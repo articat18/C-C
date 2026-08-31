@@ -300,7 +300,7 @@ The project follows the phases in the repository-level `ARCHITECTURE.md`:
 | Phase 3: first bounded research cycle | Complete (best candidate 0.60114; baseline 0.6016) |
 | Phase 4: governed full-stack autonomy | Complete (reviewed operators, sandboxed patches, recovery, reflection, and audit evidence) |
 | Phase 5: advanced ranking | Complete (E0046: 0.603005 validation primary; no test access) |
-| Phase 6: optional multi-agent expansion | Deferred |
+| Phase 6: task-completion campaign | Planned (single-agent research, sandboxed patches, sustained validation gains) |
 
 Gemini proposals now use the schema-version-2 contract and can choose one
 reviewed cleaning or feature operator, or one scalar change across loss, model,

@@ -1,6 +1,6 @@
 # AutoML Agent Architecture
 
-This architecture is based on the design material under `assets/` and the current KuaiRand-Pure starter kit. It deliberately starts with one judgment-bearing orchestrator agent surrounded by deterministic experiment infrastructure. Multi-agent coordination is deferred until the single-agent experiment loop is reliable and reproducible.
+This architecture is based on the design material under `assets/` and the current KuaiRand-Pure starter kit. It uses one judgment-bearing orchestrator agent surrounded by deterministic experiment infrastructure. The project does not require a multi-agent system; reliable single-agent research is the intended completion path.
 
 ## Architecture Principles
 
@@ -362,20 +362,46 @@ from the append-only registry and decision evidence.
   `+0.002` promotion threshold. Close this phase without finalization; retain
   the unused global budget for a separately governed autonomy campaign.
 
-### Phase 6: Optional multi-agent expansion
+### Phase 6: Task-completion campaign
 
-Worker agents may later be introduced for bounded, independent tasks:
+Phase 6 completes the `TASK.MD` objective with a **single autonomous research
+agent**. It begins a fresh, separately auditable KuaiRand-Pure campaign; Phase 5
+records remain immutable historical evidence and are not overwritten or used to
+access test data.
 
-- Research one approved modeling direction.
-- Inspect one distribution and report findings.
-- Implement one approved experiment in an isolated worktree.
-- Review one diff and run its verification suite.
+1. **Campaign initialization.** Create a new registry/experiment namespace
+   beginning at `E0001`, reproduce the protected official baseline, and record
+   the validation target, compute budget, and zero hidden-test-access state.
+2. **Research to hypothesis.** For each proposed improvement, record the
+   industry or academic source, affected pipeline stage, expected mechanism,
+   leakage risks, matched control, and predeclared validation success rule.
+   Sources inform proposals; they never execute code or weaken boundaries.
+3. **Sandboxed full-stack changes.** Convert an accepted proposal into a narrow
+   candidate patch covering one pipeline stage at a time: data cleaning,
+   training-fitted features, sampling/loss, model/ranker, or calibration and
+   submission validation. Validate the patch in a disposable checkout with unit
+   tests and protected-boundary checks before it becomes an experiment template.
+4. **Autonomous validation loop.** The agent creates, runs, diagnoses, and
+   reflects on validation-only experiments. It uses matched controls for
+   component changes, seed replications for promising results, and records
+   metrics, variance, failures, recovery actions, and the number of manual
+   interventions in the append-only campaign evidence.
+5. **Convergence and finalist selection.** Stop only after the research budget
+   is exhausted or the evidence shows no justified next direction. Require a
+   replicated improvement over the official validation baseline and evidence of
+   sustained progress, rather than a single favorable run. The agent freezes and
+   designates the strongest reproducible candidate.
+6. **Human-gated one-time finale.** The designated candidate may load the test
+   split only after explicit human approval tied to its immutable fingerprint.
+   The deterministic finalizer then evaluates once and writes the submission.
 
-The orchestrator remains the only owner of experiment state, budgets, convergence, checkpoint selection, and final submission. Model training itself is never an agent.
+The orchestrator remains the only owner of experiment state, budgets,
+checkpoint selection, and finalization approval. Model training and scoring
+remain deterministic programs.
 
 ## Immediate Milestone
 
-Phases 0 through 5 are complete. The immediate milestone is Phase 6: extend
-the governed workflow from approved templates to research-backed, sandboxed
-candidate patches while preserving the validation-only and human-finalization
-boundaries.
+Phases 0 through 5 are complete. The immediate milestone is Phase 6: complete
+the benchmark task with one autonomous agent that researches, safely implements,
+and validates full-stack improvements while preserving validation-only
+development and human-gated finalization.
