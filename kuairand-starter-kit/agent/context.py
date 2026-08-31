@@ -59,6 +59,18 @@ def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
         "continuations": continuations,
         "diagnostics": diagnostics,
         "research_sources": available_sources(),
+        "eligible_controls": [
+            {
+                "experiment_id": item["experiment_id"],
+                "template": item.get("template"),
+                "stage": item.get("stage"),
+                "operator": item.get("operator"),
+                "seed": item.get("seed"),
+                "parameters": item.get("parameters", {}),
+            }
+            for item in experiments
+            if item.get("status") == "success"
+        ],
         "constraints": {
             "selection_split": "valid",
             "test_accessed": False,
@@ -66,6 +78,7 @@ def build_agent_context(*, limit: int = 20) -> dict[str, Any]:
             "approved_operators": operator_contracts(),
             "approved_templates": sorted(TEMPLATES),
             "one_change_per_iteration": True,
+            "matched_control_rule": "A matched control must use the same seed, parameters, budget, and data_dir; sequence-model comparisons use a pointwise_fm operator-none control.",
             "instruction": "Choose one evidence-backed operator or scalar change; do not repeat exhausted BPR settings without justification.",
         },
     }

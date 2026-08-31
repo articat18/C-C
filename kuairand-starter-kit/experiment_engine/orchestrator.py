@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 from experiment_engine.controller import ControllerError, ExperimentController
+from experiment_engine.experiment_spec import SCHEMA_VERSION, ExperimentSpec
 from experiment_engine.phase3 import plan_phase3, run_phase3
 from agent.proposal import ExperimentProposal, proposal_fingerprint
 from agent.research import validate_source_ids
@@ -73,13 +74,9 @@ class ResearchOrchestrator:
         recovery_of: str | None = None,
     ) -> dict[str, Any]:
         """Materialize one validated proposal and execute it through the controller."""
-        provenance = dict(proposal.provenance)
-        if active_campaign():
-            provenance["research_sources"] = validate_source_ids(proposal.research_source_ids)
-        provenance["proposal_fingerprint"] = proposal_fingerprint(proposal)
-        provenance["manual_interventions"] = manual_interventions
-        if recovery_of is not None:
-            provenance["recovery_of"] = recovery_of
+        provenance = self._proposal_provenance(
+            proposal, manual_interventions=manual_interventions, recovery_of=recovery_of
+        )
         spec, path = self.controller.create(
             proposal.template,
             proposal.hypothesis,
@@ -94,6 +91,44 @@ class ResearchOrchestrator:
         )
         result = self.controller.run(spec, verbose=verbose)
         return {"spec_path": str(path), "result": result}
+
+    def preflight_proposal(self, proposal: ExperimentProposal) -> None:
+        """Check registry-dependent proposal rules without reserving an ID."""
+        provenance = self._proposal_provenance(proposal)
+        spec = ExperimentSpec.from_mapping({
+            "schema_version": SCHEMA_VERSION,
+            "experiment_id": "E0000",
+            "template": proposal.template,
+            "seed": proposal.seed,
+            "hypothesis": proposal.hypothesis,
+            "parameters": dict(proposal.parameters),
+            "stage": proposal.stage,
+            "operator": proposal.operator,
+            "evidence": proposal.evidence,
+            "expected_effect": proposal.expected_effect,
+            "provenance": provenance,
+            **(
+                {"control_experiment_id": proposal.control_experiment_id}
+                if proposal.control_experiment_id else {}
+            ),
+        })
+        self.controller.validate_candidate(spec)
+
+    def _proposal_provenance(
+        self,
+        proposal: ExperimentProposal,
+        *,
+        manual_interventions: int = 0,
+        recovery_of: str | None = None,
+    ) -> dict[str, Any]:
+        provenance = dict(proposal.provenance)
+        if active_campaign():
+            provenance["research_sources"] = validate_source_ids(proposal.research_source_ids)
+        provenance["proposal_fingerprint"] = proposal_fingerprint(proposal)
+        provenance["manual_interventions"] = manual_interventions
+        if recovery_of is not None:
+            provenance["recovery_of"] = recovery_of
+        return provenance
 
 
 def main() -> int:

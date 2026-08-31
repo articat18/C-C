@@ -13,10 +13,14 @@ from pathlib import Path
 import time
 from typing import Any
 
-from agent.proposal import ExperimentProposal, GeminiProposalClient, context_fingerprint
+from agent.proposal import (
+    ExperimentProposal, GeminiProposalClient, context_fingerprint,
+    proposal_fingerprint, proposal_to_dict,
+)
 from agent.context import build_agent_context
 from experiment_engine.orchestrator import ResearchOrchestrator
 from experiment_engine.experiment_runner import ExperimentTimeout
+from experiment_engine.controller import ControllerError
 from experiment_boundary import resolve_editable_path
 
 
@@ -58,7 +62,7 @@ class AutonomousResearchAgent:
                 {**context, "status": status}
             )
             if proposal is None:
-                exc = proposal_recovery.pop("exception")
+                proposal_recovery.pop("exception")
                 proposal = _fallback_proposal(context)
                 if proposal is None:
                     decision = {
@@ -83,6 +87,23 @@ class AutonomousResearchAgent:
                     "retry_count": proposal_recovery["retry_count"],
                     "selected_operator": proposal.operator,
                 }
+            proposal, preflight_recovery, preflight_rejections = (
+                self._preflight_or_recover(proposal, context)
+            )
+            if proposal is None:
+                decision = {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "status": "blocked",
+                    "reason": "unrecoverable_controller_contract_error",
+                    "recovery": preflight_recovery,
+                    "preflight_rejections": preflight_rejections,
+                    "agent_wall_seconds": round(time.monotonic() - step_started, 6),
+                }
+                decisions.append(decision)
+                _append_decision(decision)
+                break
+            if preflight_recovery is not None:
+                proposal_recovery = preflight_recovery
             decision: dict[str, Any] = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "proposal": {
@@ -101,6 +122,8 @@ class AutonomousResearchAgent:
             }
             if proposal_recovery is not None:
                 decision["recovery"] = proposal_recovery
+            if preflight_rejections:
+                decision["preflight_rejections"] = preflight_rejections
             if execute:
                 try:
                     decision["execution"] = self.orchestrator.run_proposal(
@@ -165,6 +188,78 @@ class AutonomousResearchAgent:
                     "failure_class": "transient_proposal_service" if transient else "invalid_proposal",
                 }
         raise AssertionError("proposal retry loop must return")
+
+    def _preflight_or_recover(
+        self,
+        proposal: ExperimentProposal,
+        context: dict[str, Any],
+    ) -> tuple[ExperimentProposal | None, dict[str, Any] | None, list[dict[str, Any]]]:
+        """Recover one known controller-contract rejection before reservation."""
+        try:
+            self.orchestrator.preflight_proposal(proposal)
+            return proposal, None, []
+        except ControllerError as exc:
+            if not _is_recoverable_contract_error(exc):
+                return None, {
+                    "error_type": type(exc).__name__, "error": str(exc),
+                    "action": "route_to_review", "retry_count": 0,
+                }, [{"proposal_fingerprint": proposal_fingerprint(proposal), "error": str(exc)}]
+            contract_error = exc
+
+        rejections = [{
+            "proposal_fingerprint": proposal_fingerprint(proposal),
+            "proposal": proposal_to_dict(proposal),
+            "error_type": type(contract_error).__name__,
+            "error": str(contract_error),
+        }]
+        corrected, correction_failure = self._propose_with_recovery({
+            **context,
+            "controller_preflight_error": str(contract_error),
+            "rejected_proposal": proposal_to_dict(proposal),
+            "recovery_instruction": (
+                "Correct the rejected proposal once. Keep immutable matched-control "
+                "settings identical, or omit the control and propose one valid change."
+            ),
+        })
+        if corrected is not None and proposal_fingerprint(corrected) != proposal_fingerprint(proposal):
+            try:
+                self.orchestrator.preflight_proposal(corrected)
+                return corrected, {
+                    "action": "controller_contract_correction", "retry_count": 1,
+                    "error_type": type(contract_error).__name__, "error": str(contract_error),
+                }, rejections
+            except ControllerError as correction_exc:
+                rejections.append({
+                    "proposal_fingerprint": proposal_fingerprint(corrected),
+                    "proposal": proposal_to_dict(corrected),
+                    "error_type": type(correction_exc).__name__, "error": str(correction_exc),
+                })
+        elif correction_failure is not None:
+            rejections.append({
+                "proposal_fingerprint": None,
+                "error_type": correction_failure["error_type"],
+                "error": correction_failure["error"],
+            })
+
+        fallback = _fallback_proposal(context)
+        if fallback is not None:
+            try:
+                self.orchestrator.preflight_proposal(fallback)
+                return fallback, {
+                    "action": "deterministic_fallback_after_preflight", "retry_count": 1,
+                    "error_type": type(contract_error).__name__, "error": str(contract_error),
+                    "selected_operator": fallback.operator,
+                }, rejections
+            except ControllerError as fallback_exc:
+                rejections.append({
+                    "proposal_fingerprint": proposal_fingerprint(fallback),
+                    "proposal": proposal_to_dict(fallback),
+                    "error_type": type(fallback_exc).__name__, "error": str(fallback_exc),
+                })
+        return None, {
+            "action": "route_to_review", "retry_count": 1,
+            "error_type": type(contract_error).__name__, "error": str(contract_error),
+        }, rejections
 
 
 def _reflect(execution: dict[str, Any]) -> dict[str, Any]:
@@ -260,6 +355,13 @@ def _is_transient_proposal_error(exc: Exception) -> bool:
     return any(token in message for token in (
         "timeout", "timed out", "connection", "network", "temporar",
         "unavailable", "429", "rate limit", "500", "502", "503", "504",
+    ))
+
+
+def _is_recoverable_contract_error(exc: ControllerError) -> bool:
+    message = str(exc).lower()
+    return any(token in message for token in (
+        "matched control", "matched controls", "requires a matched pointwise control",
     ))
 
 

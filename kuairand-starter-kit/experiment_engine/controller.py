@@ -331,14 +331,23 @@ class ExperimentController:
         return records[start:]
 
     def _preflight(self, spec: ExperimentSpec) -> None:
-        assert_protected_files_unchanged()
+        self.validate_candidate(spec)
         records = list(self.registry.records())
-        if len(records) >= MAX_ITERATIONS:
-            raise ControllerError(f"maximum of {MAX_ITERATIONS} experiments reached")
         if any(record.get("experiment_id") == spec.experiment_id for record in records):
             raise ControllerError(
                 f"experiment_id is already registered: {spec.experiment_id}"
             )
+
+    def validate_candidate(self, spec: ExperimentSpec) -> None:
+        """Validate a candidate against mutable campaign state without writing it.
+
+        Proposal syntax is checked before this point.  This method covers the
+        registry-dependent rules that are needed before reserving an ID.
+        """
+        assert_protected_files_unchanged()
+        records = list(self.registry.records())
+        if len(records) >= MAX_ITERATIONS:
+            raise ControllerError(f"maximum of {MAX_ITERATIONS} experiments reached")
         self._validated_control(spec, records)
         scores = [
             float(record["metrics"]["valid"]["primary"])
