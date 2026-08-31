@@ -331,7 +331,7 @@ def _validate_provenance(value: Any) -> dict[str, Any] | None:
         raise SpecificationError("provenance must be a JSON object")
     allowed = {
         "proposal_fingerprint", "context_fingerprint", "source_model",
-        "token_usage", "manual_interventions",
+        "token_usage", "manual_interventions", "research_sources",
     }
     unknown = sorted(set(value) - allowed)
     if unknown:
@@ -380,10 +380,34 @@ def _validate_provenance(value: Any) -> dict[str, Any] | None:
         raise SpecificationError(
             "provenance.manual_interventions must be a non-negative integer"
         )
+    sources = value.get("research_sources", [])
+    if not isinstance(sources, list):
+        raise SpecificationError("provenance.research_sources must be an array")
+    normalized_sources = []
+    for source in sources:
+        if not isinstance(source, Mapping):
+            raise SpecificationError("provenance.research_sources entries must be objects")
+        source_id = source.get("source_id")
+        url = source.get("url")
+        content_hash = source.get("content_sha256")
+        if (
+            not isinstance(source_id, str) or not re.fullmatch(r"S-[0-9a-f]{16}", source_id)
+            or not isinstance(url, str) or not url.startswith("https://")
+            or not isinstance(content_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", content_hash)
+        ):
+            raise SpecificationError("provenance.research_sources entries are invalid")
+        normalized_sources.append({
+            "source_id": source_id,
+            "url": url,
+            "title": str(source.get("title", "")),
+            "content_sha256": content_hash,
+            "summary": str(source.get("summary", "")),
+        })
     return {
         "proposal_fingerprint": proposal_hash,
         "context_fingerprint": context_hash,
         "source_model": source_model,
         "token_usage": normalized_usage,
         "manual_interventions": interventions,
+        "research_sources": normalized_sources,
     }

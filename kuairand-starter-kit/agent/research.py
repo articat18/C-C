@@ -79,7 +79,13 @@ def search_crossref(query: str, *, rows: int = 5) -> list[dict[str, Any]]:
         if not isinstance(url, str) or not url.startswith("https://"):
             continue
         title = titles[0] if titles and isinstance(titles[0], str) else None
-        records.append(capture_source(url, title=title, summary=f"Crossref result for: {query}"))
+        try:
+            records.append(capture_source(url, title=title, summary=f"Crossref result for: {query}"))
+        except ResearchEvidenceError:
+            # DOI landing pages commonly block automated fetches.  The live
+            # Crossref response is still citable evidence and is safer than
+            # retrying around publisher access controls.
+            records.append(_capture_crossref_metadata(item, query=query))
     return records
 
 
@@ -96,6 +102,32 @@ def available_sources() -> list[dict[str, Any]]:
         if isinstance(value, dict) and isinstance(value.get("source_id"), str):
             output.append({key: value.get(key) for key in ("source_id", "url", "title", "content_sha256", "summary")})
     return output
+
+
+def _capture_crossref_metadata(item: dict[str, Any], *, query: str) -> dict[str, Any]:
+    url = str(item["URL"])
+    titles = item.get("title") or []
+    title = titles[0] if titles and isinstance(titles[0], str) else url
+    encoded = json.dumps(item, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    digest = hashlib.sha256(encoded).hexdigest()
+    source_id = f"S-{digest[:16]}"
+    record = {
+        "source_id": source_id,
+        "url": url,
+        "title": title,
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+        "content_sha256": digest,
+        "summary": f"Crossref result for: {query}",
+        "content_excerpt": json.dumps(item, sort_keys=True)[:8000],
+        "untrusted": True,
+        "execution_policy": "reference_only",
+        "retrieval_mode": "crossref_metadata",
+    }
+    destination = resolve_editable_path(Path("runs") / "research" / f"{source_id}.json")
+    if destination.exists():
+        return json.loads(destination.read_text(encoding="utf-8"))
+    _atomic_json_write(destination, record)
+    return record
 
 
 def validate_source_ids(source_ids: list[str] | tuple[str, ...]) -> list[dict[str, Any]]:
