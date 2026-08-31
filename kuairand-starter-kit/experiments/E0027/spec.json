@@ -1,0 +1,38 @@
+{
+  "budget": {
+    "max_epochs": 40,
+    "max_wall_seconds": 21600
+  },
+  "data_dir": "./KuaiRand-Pure/data",
+  "evidence": "Diagnostics show 48,362 duplicate user-video rows in training and 3,572 in validation, indicating that users frequently revisit the same videos. The engine also suggested 'duplicate_interaction_ablation' based on this property.",
+  "expected_effect": "Improve prediction accuracy and overall ranking quality by allowing the model to learn context-specific embeddings for first-time views versus repeated user-video exposures.",
+  "experiment_id": "E0027",
+  "hypothesis": "Adding the user_video_exposure_bucket operator during the features stage will enable the model to explicitly distinguish between novel and repeated user-video interactions, capturing specific behavioral patterns tied to re-watching.",
+  "operator": "user_video_exposure_bucket",
+  "parameters": {
+    "bce_weight": 0.1,
+    "bpr_weight": 1.0,
+    "embedding_dim": 16,
+    "l2": 1e-05,
+    "learning_rate": 0.001,
+    "negatives_per_positive": 4,
+    "patience": 4,
+    "popularity_weight": 0.0
+  },
+  "provenance": {
+    "context_fingerprint": "ece10fa4eec2c30737b794ac69b88d2c585de3782f039e388374673f94295908",
+    "manual_interventions": 0,
+    "proposal_fingerprint": "e76e27a6c2438dcce333bafed4f5e2172f5be53a284932789cf7a8ebffddf345",
+    "source_model": "gemini-3.1-pro-preview-customtools",
+    "token_usage": {
+      "input_tokens": 10234,
+      "output_tokens": 293,
+      "thought_tokens": 713,
+      "total_tokens": 11240
+    }
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "stage": "features",
+  "template": "bpr_hybrid"
+}
